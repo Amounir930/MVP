@@ -1,0 +1,90 @@
+# Docker Compose Configuration for Conversion Trust Platform local development env
+# Defining isolated services for PHP App, PostgreSQL database, and Redis cache/queue store
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: conversion-trust-app
+    restart: unless-stopped
+    working_dir: /var/www/html
+    volumes:
+      - .:/var/www/html
+    ports:
+      - "8082:8082"
+    depends_on:
+      - db
+      - redis
+    networks:
+      - ct-network
+
+  db:
+    image: postgres:16-alpine
+    container_name: conversion-trust-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: conversion_trust_dev
+      POSTGRES_USER: ct_dev_user
+      POSTGRES_PASSWORD: ct_dev_password
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - ct-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: conversion-trust-redis
+    restart: unless-stopped
+    ports:
+      - "6378:6379"
+    networks:
+      - ct-network
+
+  queue:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: conversion-trust-queue
+    restart: unless-stopped
+    working_dir: /var/www/html
+    volumes:
+      - .:/var/www/html
+    command: php artisan queue:work --verbose --tries=3
+    depends_on:
+      - db
+      - redis
+    networks:
+      - ct-network
+
+  evolution:
+    image: evoapicloud/evolution-api:v2.3.6
+    container_name: conversion-trust-evolution
+    restart: unless-stopped
+    ports:
+      - "8085:8080"
+    environment:
+      - SERVER_URL=http://localhost:8085
+      - SERVER_PORT=8080
+      - SERVER_TYPE=http
+      - AUTHENTICATION_API_KEY=global-key-abc
+      - DATABASE_ENABLED=true
+      - DATABASE_PROVIDER=postgresql
+      - DATABASE_CONNECTION_URI=postgresql://ct_dev_user:ct_dev_password@db:5432/evolution_api?schema=public
+      - CACHE_REDIS_ENABLED=false
+      - CACHE_LOCAL_ENABLED=true
+    depends_on:
+      - db
+    networks:
+      - ct-network
+
+volumes:
+  pgdata:
+    driver: local
+
+networks:
+  ct-network:
+    driver: bridge
+
