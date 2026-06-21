@@ -19,9 +19,50 @@ class RegisteredUserController extends Controller
     /**
      * Display the registration view.
      */
-    public function create(): Response
+    public function create(Request $request): Response|RedirectResponse
     {
-        return Inertia::render('Auth/Register');
+        $email = $request->query('email');
+        $token = $request->query('token');
+
+        if (!$email || !$token) {
+            return redirect('/')->with('error', 'يرجى طلب رابط تفعيل أولاً لتسجيل حساب جديد.');
+        }
+
+        $valid = \App\Models\VerificationCode::where('email', $email)
+            ->where('token', $token)
+            ->where('type', 'register')
+            ->where('expires_at', '>', now())
+            ->exists();
+
+        if (!$valid) {
+            return redirect('/')->with('error', 'رابط التفعيل غير صالح أو انتهت صلاحيته. يرجى طلب رابط جديد.');
+        }
+
+        return Inertia::render('Auth/Register', [
+            'email' => $email,
+            'token' => $token,
+        ]);
+    }
+
+    /**
+     * Request a registration activation link.
+     */
+    public function requestActivationLink(Request $request): RedirectResponse
+    {
+        $request->validate([
+            'email' => 'required|string|lowercase|email|max:255|unique:'.User::class,
+        ], [
+            'email.unique' => 'هذا البريد الإلكتروني مسجل لدينا بالفعل.',
+            'email.required' => 'البريد الإلكتروني مطلوب.',
+            'email.email' => 'البريد الإلكتروني غير صحيح.',
+        ]);
+
+        User::sendOtpCode($request->email, 'register', generateToken: true);
+
+        return back()
+            ->with('status', 'activation-sent')
+            ->with('email', $request->email)
+            ->with('success', 'تم إرسال رابط التفعيل ورمز التأكيد بنجاح إلى بريدك الإلكتروني.');
     }
 
     /**
@@ -35,7 +76,31 @@ class RegisteredUserController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'required|string|lowercase|email|max:255|unique:'.User::class,
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
+            'code' => 'required|string|size:6',
+            'token' => 'required|string',
+        ], [
+            'name.required' => 'الاسم مطلوب.',
+            'email.required' => 'البريد الإلكتروني مطلوب.',
+            'email.unique' => 'هذا البريد الإلكتروني مسجل لدينا بالفعل.',
+            'password.required' => 'كلمة المرور مطلوبة.',
+            'password.confirmed' => 'تأكيد كلمة المرور غير متطابق.',
+            'code.required' => 'رمز التأكيد مطلوب.',
+            'code.size' => 'يجب أن يتكون رمز التأكيد من 6 أرقام.',
         ]);
+
+        // Verify OTP and token
+        $otpRecord = \App\Models\VerificationCode::where('email', $request->email)
+            ->where('code', $request->code)
+            ->where('token', $request->token)
+            ->where('type', 'register')
+            ->where('expires_at', '>', now())
+            ->first();
+
+        if (!$otpRecord) {
+            throw ValidationException::withMessages([
+                'code' => ['رمز التأكيد غير صحيح أو انتهت صلاحيته.'],
+            ]);
+        }
 
         $tenant = \App\Models\Tenant::create([
             'name' => $request->name . ' Store',
@@ -58,7 +123,11 @@ class RegisteredUserController extends Controller
             'email' => $request->email,
             'password' => Hash::make($request->password),
             'tenant_id' => $tenant->id,
+            'email_verified_at' => now(),
         ]);
+
+        // Delete the verified OTP
+        $otpRecord->delete();
 
         event(new Registered($user));
 

@@ -66,4 +66,59 @@ class NewPasswordController extends Controller
             'email' => [trans($status)],
         ]);
     }
+
+    /**
+     * Reset the user password using OTP.
+     *
+     * @throws ValidationException
+     */
+    public function resetWithOtp(Request $request): RedirectResponse
+    {
+        $request->validate([
+            'email' => 'required|email',
+            'code' => 'required|string|size:6',
+            'password' => ['required', 'confirmed', Rules\Password::defaults()],
+        ], [
+            'email.required' => 'البريد الإلكتروني مطلوب.',
+            'email.email' => 'البريد الإلكتروني غير صحيح.',
+            'code.required' => 'رمز التأكيد مطلوب.',
+            'code.size' => 'يجب أن يتكون رمز التأكيد من 6 أرقام.',
+            'password.required' => 'كلمة المرور مطلوبة.',
+            'password.confirmed' => 'تأكيد كلمة المرور غير متطابق.',
+        ]);
+
+        $otpRecord = \App\Models\VerificationCode::where('email', $request->email)
+            ->where('code', $request->code)
+            ->where('type', 'password_reset')
+            ->where('expires_at', '>', now())
+            ->first();
+
+        if (!$otpRecord) {
+            throw ValidationException::withMessages([
+                'code' => ['رمز التأكيد غير صحيح أو انتهت صلاحيته.'],
+            ]);
+        }
+
+        $user = \App\Models\User::where('email', $request->email)->first();
+
+        if (!$user) {
+            throw ValidationException::withMessages([
+                'email' => ['البريد الإلكتروني غير مسجل لدينا.'],
+            ]);
+        }
+
+        $user->forceFill([
+            'password' => Hash::make($request->password),
+            'remember_token' => Str::random(60),
+        ])->save();
+
+        event(new PasswordReset($user));
+
+        // Delete verification code
+        $otpRecord->delete();
+
+        return redirect('/')
+            ->with('status', 'password-updated')
+            ->with('success', 'تم تغيير كلمة المرور بنجاح. يمكنك تسجيل الدخول الآن بكلمة المرور الجديدة.');
+    }
 }

@@ -3,71 +3,136 @@
 namespace Tests\Feature\Auth;
 
 use App\Models\User;
-use Illuminate\Auth\Notifications\ResetPassword;
+use App\Models\VerificationCode;
+use App\Mail\VerificationOtpMail;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Notification;
 use Tests\TestCase;
 
 class PasswordResetTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_reset_password_link_screen_can_be_rendered(): void
+    public function test_forgot_password_screen_redirects_to_welcome_page(): void
     {
         $response = $this->get('/forgot-password');
 
-        $response->assertStatus(200);
+        $response->assertRedirect('/?action=forgot-password');
     }
 
-    public function test_reset_password_link_can_be_requested(): void
+    public function test_password_reset_code_can_be_requested(): void
     {
-        Notification::fake();
+        Mail::fake();
 
         $user = User::factory()->create();
 
-        $this->post('/forgot-password', ['email' => $user->email]);
+        $response = $this->post('/forgot-password', ['email' => $user->email]);
 
-        Notification::assertSentTo($user, ResetPassword::class);
-    }
+        $response->assertSessionHas('status', 'code-sent');
+        $response->assertSessionHas('email', $user->email);
 
-    public function test_reset_password_screen_can_be_rendered(): void
-    {
-        Notification::fake();
+        $this->assertDatabaseHas('verification_codes', [
+            'email' => $user->email,
+            'type' => 'password_reset',
+        ]);
 
-        $user = User::factory()->create();
-
-        $this->post('/forgot-password', ['email' => $user->email]);
-
-        Notification::assertSentTo($user, ResetPassword::class, function ($notification) {
-            $response = $this->get('/reset-password/'.$notification->token);
-
-            $response->assertStatus(200);
-
-            return true;
+        Mail::assertSent(VerificationOtpMail::class, function ($mail) use ($user) {
+            return $mail->email === $user->email && $mail->type === 'password_reset';
         });
     }
 
-    public function test_password_can_be_reset_with_valid_token(): void
+    public function test_password_cannot_be_reset_with_invalid_code(): void
     {
-        Notification::fake();
+        $user = User::factory()->create([
+            'password' => bcrypt('old-password'),
+        ]);
+
+        VerificationCode::create([
+            'email' => $user->email,
+            'code' => '123456',
+            'type' => 'password_reset',
+            'expires_at' => now()->addMinutes(15),
+        ]);
+
+        $response = $this->post('/reset-password-otp', [
+            'email' => $user->email,
+            'code' => '999999', // Invalid code
+            'password' => 'new-password',
+            'password_confirmation' => 'new-password',
+        ]);
+
+        $response->assertSessionHasErrors('code');
+    }
+
+    public function test_password_can_be_reset_with_valid_code(): void
+    {
+        $user = User::factory()->create([
+            'password' => bcrypt('old-password'),
+        ]);
+
+        VerificationCode::create([
+            'email' => $user->email,
+            'code' => '123456',
+            'type' => 'password_reset',
+            'expires_at' => now()->addMinutes(15),
+        ]);
+
+        $response = $this->post('/reset-password-otp', [
+            'email' => $user->email,
+            'code' => '123456',
+            'password' => 'new-password123',
+            'password_confirmation' => 'new-password123',
+        ]);
+
+        $response->assertRedirect('/');
+        $response->assertSessionHas('status', 'password-updated');
+
+        $this->assertTrue(
+            \Illuminate\Support\Facades\Hash::check('new-password123', $user->fresh()->password)
+        );
+
+        $this->assertDatabaseMissing('verification_codes', [
+            'email' => $user->email,
+            'type' => 'password_reset',
+        ]);
+    }
+
+    public function test_otp_generation_is_rate_limited(): void
+    {
+        Mail::fake();
 
         $user = User::factory()->create();
 
-        $this->post('/forgot-password', ['email' => $user->email]);
+        // 1st request should succeed
+        $response1 = $this->post('/forgot-password', ['email' => $user->email]);
+        $response1->assertSessionHas('status', 'code-sent');
 
-        Notification::assertSentTo($user, ResetPassword::class, function ($notification) use ($user) {
-            $response = $this->post('/reset-password', [
-                'token' => $notification->token,
+        // 2nd request (within 1 minute) should trigger minute rate limit
+        $response2 = $this->post('/forgot-password', ['email' => $user->email]);
+        $response2->assertSessionHasErrors('email');
+        $this->assertStringContainsString('الانتظار دقيقة واحدة', session('errors')->first('email'));
+    }
+
+    public function test_otp_generation_hourly_limit(): void
+    {
+        Mail::fake();
+        $user = User::factory()->create();
+
+        // Simulate 3 sends spread across the hour (each separated by 5 minutes so minute rate limit is bypassed)
+        for ($i = 1; $i <= 3; $i++) {
+            \Illuminate\Support\Facades\DB::table('verification_codes')->insert([
                 'email' => $user->email,
-                'password' => 'password',
-                'password_confirmation' => 'password',
+                'code' => '11111' . $i,
+                'type' => 'password_reset',
+                'expires_at' => now()->addMinutes(15),
+                'created_at' => now()->subMinutes(15 - $i * 2),
+                'updated_at' => now()->subMinutes(15 - $i * 2),
             ]);
+        }
 
-            $response
-                ->assertSessionHasNoErrors()
-                ->assertRedirect(route('login'));
-
-            return true;
-        });
+        // The 4th request should trigger hourly rate limit
+        $response = $this->post('/forgot-password', ['email' => $user->email]);
+        $response->assertSessionHasErrors('email');
+        $this->assertStringContainsString('3 مرات في الساعة', session('errors')->first('email'));
     }
 }

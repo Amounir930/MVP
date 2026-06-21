@@ -954,6 +954,12 @@ class WhatsAppIntegrationTest extends TestCase
 
         $this->assertNull(WhatsappChatSession::find($session->id)); // Session deleted immediately!
 
+        $this->assertDatabaseHas('reviews', [
+            'order_id' => $order->id,
+            'rating' => null,
+            'comment' => '6',
+        ]);
+
         Http::assertSent(function ($request) use ($instanceName) {
             return str_contains($request->url(), "/message/sendText/{$instanceName}")
                 && $request['number'] === '966512345671'
@@ -964,6 +970,7 @@ class WhatsAppIntegrationTest extends TestCase
         // Clean database configurations
         WhatsappConfig::truncate();
         WhatsappChatSession::truncate();
+        Review::truncate();
 
         WhatsappConfig::create([
             'tenant_id' => $tenant->id,
@@ -986,24 +993,23 @@ class WhatsAppIntegrationTest extends TestCase
             'expires_at' => now()->addHours(2),
         ]);
 
-        // Sending numeric typo "6" -> chatbot should keep session and resend options with default text
+        // Sending numeric typo "6" -> chatbot should directly send the fallback message and terminate session immediately
         $payload2 = $this->createWebhookPayload($instanceName, '966512345671@s.whatsapp.net', 'text', '6');
         $this->postJson('/api/v1/webhooks/whatsapp', $payload2)->assertStatus(200);
 
-        $this->assertNotNull(WhatsappChatSession::find($session2->id)); // Session still exists
+        $this->assertNull(WhatsappChatSession::find($session2->id)); // Session deleted immediately!
+
+        $this->assertDatabaseHas('reviews', [
+            'order_id' => $order->id,
+            'rating' => null,
+            'comment' => '6',
+        ]);
 
         Http::assertSent(function ($request) use ($instanceName) {
             return str_contains($request->url(), "/message/sendText/{$instanceName}")
                 && $request['number'] === '966512345671'
-                && str_contains($request['text'], 'الرجاء اختيار تقييم صحيح')
-                && str_contains($request['text'], '5 - ⭐⭐⭐⭐⭐ ممتاز');
+                && $request['text'] === 'سيتم تحويلك لخدمة العملاء الآن لمساعدتك.';
         });
-
-        // Sending non-numeric comment -> chatbot should delete/terminate session
-        $payload3 = $this->createWebhookPayload($instanceName, '966512345671@s.whatsapp.net', 'text', 'المنتج سيء');
-        $this->postJson('/api/v1/webhooks/whatsapp', $payload3)->assertStatus(200);
-
-        $this->assertNull(WhatsappChatSession::find($session2->id)); // Session deleted!
     }
 
     /**
@@ -1190,6 +1196,186 @@ class WhatsAppIntegrationTest extends TestCase
         Queue::assertNotPushed(SendWhatsAppRatingMessageJob::class, function ($job) {
             return $job->order->salla_order_id === 'ord-8888';
         });
+    }
+
+    /**
+     * Test chatbot behavior when Eastern Arabic numerals (٠-٩) are received.
+     */
+    public function test_whatsapp_chatbot_eastern_arabic_numerals_handling(): void
+    {
+        $tenant = Tenant::create(['name' => 'Merchant A']);
+        $instanceName = 'ct_' . $tenant->id;
+
+        $config = WhatsappConfig::create([
+            'tenant_id' => $tenant->id,
+            'instance_name' => $instanceName,
+            'instance_apikey' => 'inst-api-key',
+            'status' => 'connected',
+            'delay_hours' => 0,
+            'custom_questions' => [
+                'enable_questions' => true,
+                'questions' => [
+                    [
+                        'id' => 'q_1',
+                        'type' => 'text',
+                        'text' => 'ما رأيك في المنتج؟',
+                    ]
+                ]
+            ]
+        ]);
+
+        $customer = Customer::create([
+            'tenant_id' => $tenant->id,
+            'salla_customer_id' => 'c_12',
+            'name' => 'فهد',
+            'phone' => '966512345672',
+        ]);
+
+        $order = Order::create([
+            'tenant_id' => $tenant->id,
+            'salla_order_id' => 'o_12',
+            'customer_id' => $customer->id,
+            'invoice_number' => 'INV-12',
+            'total' => 100.00,
+            'status' => 'delivered',
+        ]);
+
+        // Scenario 1: Sending Eastern Arabic numeral 5 (٥) -> should successfully extract as 5 and transition to questions
+        $session = WhatsappChatSession::create([
+            'tenant_id' => $tenant->id,
+            'phone' => '966512345672',
+            'order_id' => $order->id,
+            'step' => 'awaiting_rating',
+            'expires_at' => now()->addHours(2),
+        ]);
+
+        Http::fake([
+            "*/message/sendText/{$instanceName}" => Http::response(['status' => 'success'], 200),
+        ]);
+
+        $payload = $this->createWebhookPayload($instanceName, '966512345672@s.whatsapp.net', 'text', '٥');
+        $this->postJson('/api/v1/webhooks/whatsapp', $payload)->assertStatus(200);
+
+        // Session should update rating to 5 and change step to awaiting_question
+        $session->refresh();
+        $this->assertEquals(5, $session->rating);
+        $this->assertEquals('awaiting_question', $session->step);
+
+        // Scenario 2: Sending Eastern Arabic numeral ٧ (7) -> should directly terminate and save null rating
+        $session->step = 'awaiting_rating';
+        $session->rating = null;
+        $session->save();
+
+        $payload2 = $this->createWebhookPayload($instanceName, '966512345672@s.whatsapp.net', 'text', '٧');
+        $this->postJson('/api/v1/webhooks/whatsapp', $payload2)->assertStatus(200);
+
+        // Session should be terminated/deleted
+        $this->assertNull(WhatsappChatSession::find($session->id));
+
+        $this->assertDatabaseHas('reviews', [
+            'tenant_id' => $tenant->id,
+            'order_id' => $order->id,
+            'customer_id' => $customer->id,
+            'rating' => null,
+            'comment' => '7',
+        ]);
+        
+        Http::assertSent(function ($request) use ($instanceName) {
+            return str_contains($request->url(), "/message/sendText/{$instanceName}")
+                && $request['number'] === '966512345672'
+                && $request['text'] === 'سيتم تحويلك لخدمة العملاء الآن لمساعدتك.';
+        });
+    }
+
+    /**
+     * Test chatbot behavior when unexpected text replies or out-of-range numeric ratings (like 7) are received.
+     */
+    public function test_whatsapp_chatbot_unexpected_replies_are_persisted_as_reviews(): void
+    {
+        $tenant = Tenant::create(['name' => 'Merchant A']);
+        $instanceName = 'ct_' . $tenant->id;
+
+        $config = WhatsappConfig::create([
+            'tenant_id' => $tenant->id,
+            'instance_name' => $instanceName,
+            'instance_apikey' => 'inst-api-key',
+            'status' => 'connected',
+            'delay_hours' => 0,
+        ]);
+
+        $customer = Customer::create([
+            'tenant_id' => $tenant->id,
+            'salla_customer_id' => 'c_99',
+            'name' => 'فهد',
+            'phone' => '966512345672',
+        ]);
+
+        $order = Order::create([
+            'tenant_id' => $tenant->id,
+            'salla_order_id' => 'o_99',
+            'customer_id' => $customer->id,
+            'invoice_number' => 'INV-99',
+            'total' => 100.00,
+            'status' => 'delivered',
+        ]);
+
+        Http::fake([
+            "*/message/sendText/{$instanceName}" => Http::response(['status' => 'success'], 200),
+            "*/message/sendList/{$instanceName}" => Http::response(['status' => 'success'], 200),
+        ]);
+
+        // Scenario 1: Customer replies with non-numeric text directly on first step
+        $session = WhatsappChatSession::create([
+            'tenant_id' => $tenant->id,
+            'phone' => '966512345672',
+            'order_id' => $order->id,
+            'step' => 'awaiting_rating',
+            'expires_at' => now()->addHours(2),
+        ]);
+
+        $payload = $this->createWebhookPayload($instanceName, '966512345672@s.whatsapp.net', 'text', 'المتجر ممتاز جداً والتوصيل سريع');
+        $this->postJson('/api/v1/webhooks/whatsapp', $payload)->assertStatus(200);
+
+        // Session should be terminated/deleted
+        $this->assertNull(WhatsappChatSession::find($session->id));
+
+        // Review should be created in DB with null rating
+        app()->bind('current_tenant_id', fn () => $tenant->id);
+        $this->assertDatabaseHas('reviews', [
+            'tenant_id' => $tenant->id,
+            'order_id' => $order->id,
+            'customer_id' => $customer->id,
+            'rating' => null,
+            'comment' => 'المتجر ممتاز جداً والتوصيل سريع',
+        ]);
+
+        // Scenario 2: Customer replies with out-of-range numeric value (like 7)
+        // Reset databases
+        WhatsappChatSession::truncate();
+        Review::truncate();
+
+        $session2 = WhatsappChatSession::create([
+            'tenant_id' => $tenant->id,
+            'phone' => '966512345672',
+            'order_id' => $order->id,
+            'step' => 'awaiting_rating',
+            'expires_at' => now()->addHours(2),
+        ]);
+
+        $payload2 = $this->createWebhookPayload($instanceName, '966512345672@s.whatsapp.net', 'text', '٧');
+        $this->postJson('/api/v1/webhooks/whatsapp', $payload2)->assertStatus(200);
+
+        // Session should be terminated/deleted immediately
+        $this->assertNull(WhatsappChatSession::find($session2->id));
+
+        // Review should be saved in DB immediately with null rating
+        $this->assertDatabaseHas('reviews', [
+            'tenant_id' => $tenant->id,
+            'order_id' => $order->id,
+            'customer_id' => $customer->id,
+            'rating' => null,
+            'comment' => '7',
+        ]);
     }
 
     /**

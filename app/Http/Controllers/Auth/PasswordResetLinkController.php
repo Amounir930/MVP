@@ -15,11 +15,9 @@ class PasswordResetLinkController extends Controller
     /**
      * Display the password reset link request view.
      */
-    public function create(): Response
+    public function create(): RedirectResponse
     {
-        return Inertia::render('Auth/ForgotPassword', [
-            'status' => session('status'),
-        ]);
+        return redirect()->route('login', ['action' => 'forgot-password']);
     }
 
     /**
@@ -31,21 +29,24 @@ class PasswordResetLinkController extends Controller
     {
         $request->validate([
             'email' => 'required|email',
+        ], [
+            'email.required' => 'البريد الإلكتروني مطلوب.',
+            'email.email' => 'البريد الإلكتروني غير صحيح.',
         ]);
 
-        // We will send the password reset link to this user. Once we have attempted
-        // to send the link, we will examine the response then see the message we
-        // need to show to the user. Finally, we'll send out a proper response.
-        $status = Password::sendResetLink(
-            $request->only('email')
-        );
+        $user = \App\Models\User::where('email', $request->email)->first();
 
-        if ($status == Password::RESET_LINK_SENT) {
-            return back()->with('status', __($status));
+        if (!$user) {
+            throw ValidationException::withMessages([
+                'email' => ['البريد الإلكتروني غير مسجل لدينا.'],
+            ]);
         }
 
-        throw ValidationException::withMessages([
-            'email' => [trans($status)],
-        ]);
+        \App\Models\User::sendOtpCode($request->email, 'password_reset', false);
+
+        return back()
+            ->with('status', 'code-sent')
+            ->with('email', $request->email)
+            ->with('success', 'تم إرسال رمز التحقق بنجاح إلى بريدك الإلكتروني.');
     }
 }

@@ -17,6 +17,9 @@ Route::middleware('guest')->group(function () {
 
     Route::post('register', [RegisteredUserController::class, 'store']);
 
+    Route::post('register/request-link', [RegisteredUserController::class, 'requestActivationLink'])
+        ->name('register.request-link');
+
     Route::get('/', [AuthenticatedSessionController::class, 'create'])
         ->name('login');
 
@@ -33,6 +36,9 @@ Route::middleware('guest')->group(function () {
 
     Route::post('reset-password', [NewPasswordController::class, 'store'])
         ->name('password.store');
+
+    Route::post('reset-password-otp', [NewPasswordController::class, 'resetWithOtp'])
+        ->name('password.reset.otp');
 });
 
 Route::middleware('auth')->group(function () {

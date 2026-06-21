@@ -208,11 +208,25 @@ class SubscriptionBillingTest extends TestCase
 
     public function test_new_user_registration_creates_free_subscription(): void
     {
+        $email = 'new@merchant.com';
+        $token = 'test-register-token';
+        $code = '123456';
+
+        \App\Models\VerificationCode::create([
+            'email' => $email,
+            'code' => $code,
+            'type' => 'register',
+            'token' => $token,
+            'expires_at' => now()->addHour(),
+        ]);
+
         $response = $this->post('/register', [
             'name' => 'New Merchant',
-            'email' => 'new@merchant.com',
+            'email' => $email,
             'password' => 'Password123!',
             'password_confirmation' => 'Password123!',
+            'code' => $code,
+            'token' => $token,
         ]);
 
         $response->assertRedirect('/dashboard');

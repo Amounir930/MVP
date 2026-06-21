@@ -138,18 +138,36 @@ class WhatsAppWebhookController extends Controller
                 ?? $message['extendedTextMessage']['text'] 
                 ?? '';
 
+            // Convert Eastern Arabic numerals (٠-٩) to Western Arabic numerals (0-9)
+            $arabic_eastern = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
+            $arabic_western = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
+            $incomingText = str_replace($arabic_eastern, $arabic_western, $incomingText);
+
             // State Machine processing
             switch ($session->step) {
                 case 'awaiting_rating':
                     // Extract rating value from list reply, button reply or text input
-                    $ratingVal = $message['listResponseMessage']['singleSelectReply']['selectedRowId']
+                    $ratingValRaw = $message['listResponseMessage']['singleSelectReply']['selectedRowId']
                         ?? $message['buttonsResponseMessage']['selectedButtonId']
                         ?? trim($incomingText);
 
-                    $ratingVal = (int) preg_replace('/[^0-9]/', '', $ratingVal);
+                    $ratingValNormalized = str_replace($arabic_eastern, $arabic_western, $ratingValRaw);
+                    $ratingVal = (int) preg_replace('/[^0-9]/', '', $ratingValNormalized);
 
                     if ($ratingVal >= 1 && $ratingVal <= 5) {
                         $session->rating = $ratingVal;
+
+                        // Save/update review immediately so it is registered in the dashboard
+                        Review::updateOrCreate(
+                            ['order_id' => $session->order_id],
+                            [
+                                'tenant_id' => $session->tenant_id,
+                                'customer_id' => $session->order->customer_id,
+                                'rating' => $ratingVal,
+                                'status' => 'pending',
+                                'source' => 'whatsapp',
+                            ]
+                        );
 
                         $customQuestions = $config->custom_questions ?? null;
                         $questions = [];
@@ -206,51 +224,31 @@ class WhatsAppWebhookController extends Controller
                             $this->sendQuestion($driver, $tenant, $senderPhone, $questions[0], 0, count($questions));
                         }
                     } else {
-                        // Resend list or send custom response if invalid input
+                        // Unexpected input (not a number 1-5)
+                        // Save the review with null rating and the incoming text as the comment
+                        Review::updateOrCreate(
+                            ['order_id' => $session->order_id],
+                            [
+                                'tenant_id' => $session->tenant_id,
+                                'customer_id' => $session->order->customer_id,
+                                'rating' => null,
+                                'comment' => $incomingText,
+                                'status' => 'pending',
+                                'source' => 'whatsapp',
+                            ]
+                        );
+
+                        // Send the merchant's customer service message or default fallback
                         $customQuestions = $config->custom_questions ?? null;
                         $invalidRatingMsg = $customQuestions['invalid_rating_message'] ?? null;
-
-                        if (!empty($invalidRatingMsg)) {
-                            // If a custom invalid rating message is defined, send it directly and delete/terminate session immediately
-                            $driver->sendTextMessage($tenant, $senderPhone, $invalidRatingMsg);
-                            $session->delete();
-                        } else {
-                            // No custom message: check if input is numeric
-                            $isNumericInput = is_numeric(trim($incomingText)) || !empty($message['listResponseMessage']) || !empty($message['buttonsResponseMessage']);
-
-                            if ($isNumericInput) {
-                                // Numeric typo: resend options
-                                $body = $customQuestions['rating_invalid_warning'] ?? "الرجاء اختيار تقييم صحيح من 1 إلى 5 نجوم باستخدام القائمة:";
-                                if (empty($body)) {
-                                    $body = "الرجاء اختيار تقييم صحيح من 1 إلى 5 نجوم باستخدام القائمة:";
-                                }
-                                $buttonLabel = $customQuestions['rating_button_label'] ?? "اختر التقييم بالنجوم";
-                                if (empty($buttonLabel)) {
-                                    $buttonLabel = "اختر التقييم بالنجوم";
-                                }
-                                $rows = [
-                                    ['id' => '5', 'title' => $customQuestions['rating_label_5'] ?? '⭐⭐⭐⭐⭐ ممتاز'],
-                                    ['id' => '4', 'title' => $customQuestions['rating_label_4'] ?? '⭐⭐⭐⭐ جيد جداً'],
-                                    ['id' => '3', 'title' => $customQuestions['rating_label_3'] ?? '⭐⭐⭐ مقبول'],
-                                    ['id' => '2', 'title' => $customQuestions['rating_label_2'] ?? '⭐⭐ سيء'],
-                                    ['id' => '1', 'title' => $customQuestions['rating_label_1'] ?? '⭐ سيء جداً'],
-                                ];
-                                // Fallback for titles
-                                foreach ($rows as $key => $row) {
-                                    if (empty($row['title'])) {
-                                        if ($row['id'] === '5') $rows[$key]['title'] = '⭐⭐⭐⭐⭐ ممتاز';
-                                        if ($row['id'] === '4') $rows[$key]['title'] = '⭐⭐⭐⭐ جيد جداً';
-                                        if ($row['id'] === '3') $rows[$key]['title'] = '⭐⭐⭐ مقبول';
-                                        if ($row['id'] === '2') $rows[$key]['title'] = '⭐⭐ سيء';
-                                        if ($row['id'] === '1') $rows[$key]['title'] = '⭐ سيء جداً';
-                                    }
-                                }
-                                $driver->sendInteractiveList($tenant, $senderPhone, $body, $buttonLabel, $rows);
-                            } else {
-                                // Text comment/objection: terminate session
-                                $session->delete();
-                            }
+                        if (empty($invalidRatingMsg)) {
+                            $invalidRatingMsg = "سيتم تحويلك لخدمة العملاء الآن لمساعدتك.";
                         }
+
+                        $driver->sendTextMessage($tenant, $senderPhone, $invalidRatingMsg);
+                        
+                        // Terminate session
+                        $session->delete();
                     }
                     break;
 
@@ -454,18 +452,22 @@ class WhatsAppWebhookController extends Controller
         }
 
         // Save finalized review record
-        Review::create([
-            'tenant_id' => $session->tenant_id,
-            'order_id' => $session->order_id,
-            'customer_id' => $session->order->customer_id,
-            'rating' => $session->rating,
-            'answers' => $responses,
-            'comment' => $textComment,
-            'media_url' => $mediaUrl,
-            'media_type' => $mediaType,
-            'status' => 'pending',
-            'source' => 'whatsapp',
-        ]);
+        Review::updateOrCreate(
+            [
+                'order_id' => $session->order_id,
+            ],
+            [
+                'tenant_id' => $session->tenant_id,
+                'customer_id' => $session->order->customer_id,
+                'rating' => $session->rating,
+                'answers' => $responses,
+                'comment' => $textComment,
+                'media_url' => $mediaUrl,
+                'media_type' => $mediaType,
+                'status' => 'pending',
+                'source' => 'whatsapp',
+            ]
+        );
 
         // Terminate and delete the chat session
         $session->delete();
