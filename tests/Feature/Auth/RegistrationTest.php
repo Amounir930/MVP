@@ -17,7 +17,7 @@ class RegistrationTest extends TestCase
     {
         $response = $this->get('/register');
 
-        $response->assertRedirect('/');
+        $response->assertRedirect('/admin/login');
         $response->assertSessionHas('error');
     }
 
@@ -36,7 +36,7 @@ class RegistrationTest extends TestCase
 
         $response = $this->get("/register?email={$email}&token={$token}");
 
-        $response->assertRedirect('/?action=register&email=merchant%40example.com&otp_token=test-token-12345');
+        $response->assertRedirect('/admin/login?action=register&email=merchant%40example.com&otp_token=test-token-12345');
     }
 
     public function test_activation_link_can_be_requested(): void

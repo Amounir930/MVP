@@ -117,7 +117,7 @@ class NewPasswordController extends Controller
         // Delete verification code
         $otpRecord->delete();
 
-        return redirect('/')
+        return redirect()->route('login')
             ->with('status', 'password-updated')
             ->with('success', 'تم تغيير كلمة المرور بنجاح. يمكنك تسجيل الدخول الآن بكلمة المرور الجديدة.');
     }

@@ -5,8 +5,12 @@ use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
+Route::get('/', function () {
+    return Inertia::render('Landing');
+});
+
 Route::get('login', function () {
-    return redirect('/');
+    return redirect()->route('login');
 });
 
 Route::get('/dashboard', function (Illuminate\Http\Request $request) {

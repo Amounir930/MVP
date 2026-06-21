@@ -42,7 +42,7 @@ class AuthenticatedSessionController extends Controller
             $request->session()->invalidate();
             $request->session()->regenerateToken();
 
-            return redirect('/')->withErrors([
+            return redirect()->route('login')->withErrors([
                 'email' => 'هذه الصفحة مخصصة للتجار فقط. يرجى استخدام صفحة تسجيل الدخول الخاصة بالسوبر أدمن.',
             ]);
         }
@@ -61,6 +61,6 @@ class AuthenticatedSessionController extends Controller
 
         $request->session()->regenerateToken();
 
-        return redirect('/');
+        return redirect()->route('login');
     }
 }

@@ -17,7 +17,7 @@ class PasswordResetTest extends TestCase
     {
         $response = $this->get('/forgot-password');
 
-        $response->assertRedirect('/?action=forgot-password');
+        $response->assertRedirect('/admin/login?action=forgot-password');
     }
 
     public function test_password_reset_code_can_be_requested(): void
@@ -84,7 +84,7 @@ class PasswordResetTest extends TestCase
             'password_confirmation' => 'new-password123',
         ]);
 
-        $response->assertRedirect('/');
+        $response->assertRedirect('/admin/login');
         $response->assertSessionHas('status', 'password-updated');
 
         $this->assertTrue(

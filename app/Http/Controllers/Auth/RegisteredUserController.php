@@ -26,7 +26,7 @@ class RegisteredUserController extends Controller
         $token = $request->query('token');
 
         if (!$email || !$token) {
-            return redirect('/')->with('error', 'يرجى طلب رمز تحقق أولاً لتسجيل حساب جديد.');
+            return redirect()->route('login')->with('error', 'يرجى طلب رمز تحقق أولاً لتسجيل حساب جديد.');
         }
 
         $valid = \App\Models\VerificationCode::where('email', $email)
@@ -36,7 +36,7 @@ class RegisteredUserController extends Controller
             ->exists();
 
         if (!$valid) {
-            return redirect('/')->with('error', 'رمز التفعيل غير صالح أو انتهت صلاحيته. يرجى طلب رمز جديد.');
+            return redirect()->route('login')->with('error', 'رمز التفعيل غير صالح أو انتهت صلاحيته. يرجى طلب رمز جديد.');
         }
 
         return redirect()->route('login', [
