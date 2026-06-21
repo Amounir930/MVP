@@ -29,6 +29,15 @@ const salla = computed(() => page.props.salla as { connected: boolean; merchant_
 const whatsapp = computed(() => page.props.whatsapp as { connected: boolean; instance_name: string | null; status: string; delay_hours: number; custom_questions: any });
 const errors = computed(() => page.props.errors || {});
 const flash = computed(() => (page.props.flash || {}) as { success: string | null; error: string | null });
+const subscription = computed(() => page.props.subscription as {
+  plan_name: string;
+  price: number;
+  status: string;
+  current_period_start: string | null;
+  current_period_end: string | null;
+  monthly_limit: number;
+  current_period_usage: number;
+} | null);
 
 let intervalId: any = null;
 let whatsappIntervalId: any = null;
@@ -311,6 +320,41 @@ const simulateOrder = () => {
     router.post('/sandbox/simulate-order', sandboxForm.value, {
         onFinish: () => {
             isSimulating.value = false;
+        }
+    });
+};
+
+// Billing & Subscription Upgrade States
+const showUpgradeModal = ref(false);
+const selectedUpgradePlan = ref('');
+const upgradeCardDetails = ref({
+    number: '4000 1234 5678 9010',
+    expiry: '12/29',
+    cvc: '123',
+    name: page.props.auth?.user?.name || 'التاجر ش.م'
+});
+const isUpgrading = ref(false);
+
+const openUpgradeModal = (plan: string) => {
+    selectedUpgradePlan.value = plan;
+    showUpgradeModal.value = true;
+};
+
+const closeUpgradeModal = () => {
+    showUpgradeModal.value = false;
+    selectedUpgradePlan.value = '';
+};
+
+const handleUpgradeSubmit = () => {
+    isUpgrading.value = true;
+    router.post('/billing/upgrade', {
+        plan_name: selectedUpgradePlan.value
+    }, {
+        onSuccess: () => {
+            closeUpgradeModal();
+        },
+        onFinish: () => {
+            isUpgrading.value = false;
         }
     });
 };
@@ -727,6 +771,15 @@ const chartOptions = {
                         </span>
                     </button>
                     <button
+                        @click="activeMainTab = 'billing'"
+                        :class="activeMainTab === 'billing'
+                            ? 'bg-indigo-600 text-white shadow-[0_4px_12px_0_rgba(79,70,229,0.25)]'
+                            : 'text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100/60 dark:hover:bg-white/5'"
+                        class="px-5 py-2.5 rounded-xl text-sm font-bold transition-all duration-200"
+                    >
+                        الباقات والاشتراكات
+                    </button>
+                    <button
                         @click="activeMainTab = 'sandbox'"
                         :class="activeMainTab === 'sandbox'
                             ? 'bg-indigo-600 text-white shadow-[0_4px_12px_0_rgba(79,70,229,0.25)]'
@@ -766,9 +819,9 @@ const chartOptions = {
                             <span class="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest">الرسائل المستهلكة</span>
                             <div class="flex items-baseline gap-2 mt-4">
                                 <h4 class="text-4xl font-extrabold text-gray-900 dark:text-gray-100 font-mono">
-                                    {{ dashboardStats.messages_consumed }}
+                                    {{ subscription ? subscription.current_period_usage : dashboardStats.messages_consumed }}
                                 </h4>
-                                <span class="text-sm text-gray-400 dark:text-gray-500 font-mono">/ 200</span>
+                                <span class="text-sm text-gray-400 dark:text-gray-500 font-mono">/ {{ subscription ? subscription.monthly_limit : 50 }}</span>
                             </div>
                             <p class="text-[11px] text-gray-400 dark:text-gray-500 mt-4 pt-3 border-t border-gray-100 dark:border-gray-800">من رصيد الباقة النشطة هذا الشهر</p>
                         </div>
@@ -1742,6 +1795,224 @@ const chartOptions = {
                     </div>
                 </div>
 
+                <!-- ===== TAB: Billing & Subscriptions ===== -->
+                <div v-else-if="activeMainTab === 'billing'" class="space-y-6 animate-fade-in text-right" dir="rtl">
+                    <!-- Current Plan status card -->
+                    <div class="bg-white/80 dark:bg-[#1C1C1E]/80 backdrop-blur-xl p-8 rounded-3xl border border-white/20 dark:border-white/5 shadow-[0_8px_32px_0_rgba(0,0,0,0.04)] dark:shadow-[0_8px_32px_0_rgba(0,0,0,0.2)]">
+                        <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 border-b border-gray-100 dark:border-white/5 pb-6">
+                            <div class="flex items-center gap-4">
+                                <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-19.5 5.25h19.5m-19.5 0h19.5M2.25 9.75h19.5m-19.5 3h19.5m-19.5 0h19.5M2.25 12h19.5m-19.5 0h19.5M12 12.75h.007v.008H12v-.008Z" />
+                                    </svg>
+                                </div>
+                                <div>
+                                    <h3 class="text-xl font-bold text-gray-900 dark:text-gray-100">باقة الاشتراك الحالية</h3>
+                                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">تفاصيل الباقة النشطة والحدود المستهلكة لرسائل التقييم</p>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <span class="px-4 py-1.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold text-sm">
+                                    الباقة النشطة: {{ subscription ? subscription.plan_name.toUpperCase() : 'FREE' }}
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- Usage progress -->
+                        <div class="mt-6 space-y-4">
+                            <div class="flex items-center justify-between text-sm">
+                                <span class="font-semibold text-gray-600 dark:text-gray-450">استهلاك الباقة للرسائل</span>
+                                <span class="font-mono font-bold text-gray-800 dark:text-gray-250">
+                                    {{ subscription ? subscription.current_period_usage : 0 }} / {{ subscription ? subscription.monthly_limit : 50 }} رسالة
+                                </span>
+                            </div>
+                            <div class="w-full bg-gray-100 dark:bg-gray-800 h-3 rounded-full overflow-hidden">
+                                <div 
+                                    class="bg-indigo-650 h-full rounded-full transition-all duration-500"
+                                    :style="{ width: Math.min(((subscription ? subscription.current_period_usage : 0) / (subscription ? subscription.monthly_limit : 50)) * 100, 100) + '%' }"
+                                ></div>
+                            </div>
+                            <div class="flex flex-col sm:flex-row justify-between text-xs text-gray-400 dark:text-gray-500 gap-2 pt-2">
+                                <span>تاريخ بدء الفترة: {{ subscription?.current_period_start ? new Date(subscription.current_period_start).toLocaleDateString('ar-SA') : '--' }}</span>
+                                <span>تاريخ التجديد/الانتهاء: {{ subscription?.current_period_end ? new Date(subscription.current_period_end).toLocaleDateString('ar-SA') : '--' }}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Pricing cards -->
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <!-- Free Plan Card -->
+                        <div class="bg-white/80 dark:bg-[#1C1C1E]/80 backdrop-blur-xl p-8 rounded-3xl border border-white/20 dark:border-white/5 shadow-[0_8px_32px_0_rgba(0,0,0,0.04)] dark:shadow-[0_8px_32px_0_rgba(0,0,0,0.2)] flex flex-col justify-between" :class="{ 'ring-2 ring-indigo-650': subscription?.plan_name === 'free' }">
+                            <div>
+                                <h4 class="text-lg font-bold text-gray-800 dark:text-gray-200">الباقة المجانية</h4>
+                                <p class="text-xs text-gray-450 dark:text-gray-500 mt-2">مثالية لتجربة المنصة والبدء الفوري.</p>
+                                <div class="mt-6 flex items-baseline gap-1">
+                                    <span class="text-4xl font-extrabold text-gray-900 dark:text-white">0</span>
+                                    <span class="text-sm font-semibold text-gray-400 dark:text-gray-500">ريال / شهرياً</span>
+                                </div>
+                                <ul class="mt-6 space-y-4 text-sm text-gray-600 dark:text-gray-400">
+                                    <li class="flex items-center gap-2">
+                                        <svg class="w-4 h-4 text-indigo-650 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" /></svg>
+                                        <span>50 رسالة تقييم تفاعلية شهرياً</span>
+                                    </li>
+                                    <li class="flex items-center gap-2">
+                                        <svg class="w-4 h-4 text-indigo-650 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" /></svg>
+                                        <span>ربط تلقائي مع سلة وواتساب</span>
+                                    </li>
+                                    <li class="flex items-center gap-2 text-amber-500">
+                                        <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" /></svg>
+                                        <span>ظهور العلامة المائية للـ Widget</span>
+                                    </li>
+                                </ul>
+                            </div>
+                            <div class="mt-8">
+                                <button 
+                                    disabled
+                                    class="w-full py-3 px-4 rounded-xl text-sm font-bold text-center border border-gray-250 dark:border-gray-700 text-gray-400 dark:text-gray-500 cursor-default bg-gray-50 dark:bg-gray-900/50"
+                                >
+                                    {{ subscription?.plan_name === 'free' ? 'باقتك الحالية' : 'الباقة المجانية' }}
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Startup Plan Card -->
+                        <div class="bg-white/85 dark:bg-[#1C1C1E]/85 backdrop-blur-xl p-8 rounded-3xl border border-white/25 dark:border-white/10 shadow-[0_12px_40px_0_rgba(0,0,0,0.06)] dark:shadow-[0_12px_40px_0_rgba(0,0,0,0.35)] flex flex-col justify-between relative" :class="{ 'ring-2 ring-indigo-600': subscription?.plan_name === 'startup' }">
+                            <div class="absolute -top-3 left-6 px-3 py-1 bg-indigo-600 text-white text-[10px] font-extrabold rounded-full tracking-wider uppercase">الأكثر شعبية</div>
+                            <div>
+                                <h4 class="text-lg font-bold text-gray-800 dark:text-gray-200">باقة الانطلاق (Startup)</h4>
+                                <p class="text-xs text-gray-450 dark:text-gray-500 mt-2">للمتاجر النامية التي تحتاج إلى هوية مخصصة بالكامل.</p>
+                                <div class="mt-6 flex items-baseline gap-1">
+                                    <span class="text-4xl font-extrabold text-gray-900 dark:text-white font-mono">99</span>
+                                    <span class="text-sm font-semibold text-gray-400 dark:text-gray-500">ريال / شهرياً</span>
+                                </div>
+                                <ul class="mt-6 space-y-4 text-sm text-gray-600 dark:text-gray-400">
+                                    <li class="flex items-center gap-2">
+                                        <svg class="w-4 h-4 text-indigo-650 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" /></svg>
+                                        <span>400 رسالة تقييم تفاعلية شهرياً</span>
+                                    </li>
+                                    <li class="flex items-center gap-2">
+                                        <svg class="w-4 h-4 text-indigo-650 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" /></svg>
+                                        <span class="font-bold text-gray-800 dark:text-gray-200">إزالة العلامة المائية للـ Widget بالكامل</span>
+                                    </li>
+                                    <li class="flex items-center gap-2">
+                                        <svg class="w-4 h-4 text-indigo-650 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" /></svg>
+                                        <span>خيارات وأسئلة غير محدودة ومخصصة</span>
+                                    </li>
+                                </ul>
+                            </div>
+                            <div class="mt-8">
+                                <button 
+                                    @click="openUpgradeModal('startup')"
+                                    :disabled="subscription?.plan_name === 'startup'"
+                                    class="w-full py-3 px-4 rounded-xl text-sm font-bold text-center transition duration-200"
+                                    :class="subscription?.plan_name === 'startup'
+                                        ? 'bg-gray-50 dark:bg-gray-900/50 text-gray-400 dark:text-gray-500 border border-gray-250 dark:border-gray-700 cursor-default'
+                                        : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-600/20'"
+                                >
+                                    {{ subscription?.plan_name === 'startup' ? 'باقتك الحالية' : 'ترقية الباقة الآن' }}
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Growth Plan Card -->
+                        <div class="bg-white/80 dark:bg-[#1C1C1E]/80 backdrop-blur-xl p-8 rounded-3xl border border-white/20 dark:border-white/5 shadow-[0_8px_32px_0_rgba(0,0,0,0.04)] dark:shadow-[0_8px_32px_0_rgba(0,0,0,0.2)] flex flex-col justify-between" :class="{ 'ring-2 ring-indigo-600': subscription?.plan_name === 'growth' }">
+                            <div>
+                                <h4 class="text-lg font-bold text-gray-800 dark:text-gray-200">باقة النمو (Growth)</h4>
+                                <p class="text-xs text-gray-450 dark:text-gray-500 mt-2">للمتاجر الكبيرة ذات المبيعات الضخمة والنشطة.</p>
+                                <div class="mt-6 flex items-baseline gap-1">
+                                    <span class="text-4xl font-extrabold text-gray-900 dark:text-white font-mono">199</span>
+                                    <span class="text-sm font-semibold text-gray-400 dark:text-gray-500">ريال / شهرياً</span>
+                                </div>
+                                <ul class="mt-6 space-y-4 text-sm text-gray-600 dark:text-gray-400">
+                                    <li class="flex items-center gap-2">
+                                        <svg class="w-4 h-4 text-indigo-650 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" /></svg>
+                                        <span>1000 رسالة تقييم تفاعلية شهرياً</span>
+                                    </li>
+                                    <li class="flex items-center gap-2">
+                                        <svg class="w-4 h-4 text-indigo-650 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" /></svg>
+                                        <span>بدون علامة مائية للـ Widget</span>
+                                    </li>
+                                    <li class="flex items-center gap-2">
+                                        <svg class="w-4 h-4 text-indigo-650 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" /></svg>
+                                        <span>دعم فني مخصص وأولوية VIP</span>
+                                    </li>
+                                </ul>
+                            </div>
+                            <div class="mt-8">
+                                <button 
+                                    @click="openUpgradeModal('growth')"
+                                    :disabled="subscription?.plan_name === 'growth'"
+                                    class="w-full py-3 px-4 rounded-xl text-sm font-bold text-center transition duration-200"
+                                    :class="subscription?.plan_name === 'growth'
+                                        ? 'bg-gray-50 dark:bg-gray-900/50 text-gray-400 dark:text-gray-500 border border-gray-250 dark:border-gray-700 cursor-default'
+                                        : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-600/20'"
+                                >
+                                    {{ subscription?.plan_name === 'growth' ? 'باقتك الحالية' : 'ترقية الباقة الآن' }}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Premium Glassmorphic Payment Modal -->
+        <div v-if="showUpgradeModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" dir="rtl">
+            <div class="bg-white/95 dark:bg-[#1C1C1E]/95 backdrop-blur-2xl border border-white/20 dark:border-white/10 rounded-3xl shadow-2xl max-w-md w-full overflow-hidden transition-all duration-300 transform scale-100">
+                <div class="p-6 border-b border-gray-100 dark:border-white/5 flex items-center justify-between">
+                    <h3 class="text-lg font-bold text-gray-900 dark:text-white">إكمال عملية الترقية (بوابة الدفع التجريبية)</h3>
+                    <button @click="closeUpgradeModal" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                        <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
+                </div>
+                
+                <form @submit.prevent="handleUpgradeSubmit" class="p-6 space-y-6">
+                    <div class="p-4 rounded-2xl bg-indigo-500/10 border border-indigo-400/20 text-indigo-700 dark:text-indigo-400 text-xs flex flex-col gap-1">
+                        <span class="font-bold">الباقة المحددة: {{ selectedUpgradePlan.toUpperCase() }}</span>
+                        <span>السعر: {{ selectedUpgradePlan === 'startup' ? '99.00' : '199.00' }} ريال سعودي شهرياً</span>
+                    </div>
+
+                    <!-- Simulated Card Info -->
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-bold text-gray-600 dark:text-gray-450 mb-1.5">اسم صاحب البطاقة</label>
+                            <input type="text" v-model="upgradeCardDetails.name" required class="w-full rounded-xl border border-gray-250 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 px-3.5 py-2.5 text-gray-900 dark:text-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-right text-xs outline-none transition" />
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-600 dark:text-gray-450 mb-1.5">رقم البطاقة المصرفية</label>
+                            <input type="text" v-model="upgradeCardDetails.number" required class="w-full rounded-xl border border-gray-250 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 px-3.5 py-2.5 text-gray-900 dark:text-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-left font-mono text-xs outline-none transition" />
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-bold text-gray-600 dark:text-gray-450 mb-1.5">تاريخ الانتهاء</label>
+                                <input type="text" v-model="upgradeCardDetails.expiry" placeholder="MM/YY" required class="w-full rounded-xl border border-gray-250 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 px-3.5 py-2.5 text-gray-900 dark:text-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-center font-mono text-xs outline-none transition" />
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-gray-600 dark:text-gray-450 mb-1.5">الرمز السري (CVC)</label>
+                                <input type="password" v-model="upgradeCardDetails.cvc" placeholder="***" required class="w-full rounded-xl border border-gray-250 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 px-3.5 py-2.5 text-gray-900 dark:text-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-center font-mono text-xs outline-none transition" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center gap-3">
+                        <button 
+                            type="submit" 
+                            :disabled="isUpgrading" 
+                            class="flex-1 py-3 px-4 rounded-xl text-xs font-bold text-center text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none transition shadow-lg shadow-indigo-600/20 disabled:opacity-50"
+                        >
+                            <span v-if="isUpgrading">جاري معالجة الدفع...</span>
+                            <span v-else>ادفع ورَقِّ الباقة الآن</span>
+                        </button>
+                        <button 
+                            type="button" 
+                            @click="closeUpgradeModal" 
+                            class="py-3 px-4 rounded-xl text-xs font-bold text-center border border-gray-250 dark:border-gray-750 text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800 transition"
+                        >
+                            إلغاء
+                        </button>
+                    </div>
+                </form>
             </div>
         </div>
     </AuthenticatedLayout>

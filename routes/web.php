@@ -36,6 +36,9 @@ Route::middleware('auth')->group(function () {
     // Sandbox / Simulation route
     Route::post('/sandbox/simulate-order', [\App\Http\Controllers\Api\V1\SandboxController::class, 'simulateOrder'])->name('sandbox.simulate-order');
 
+    // Billing / Subscription routes
+    Route::post('/billing/upgrade', [\App\Http\Controllers\Api\V1\BillingController::class, 'upgrade'])->name('billing.upgrade');
+
     // Reviews moderation and utility routes
     Route::get('/reviews/export', [\App\Http\Controllers\Api\V1\ReviewController::class, 'export'])->name('reviews.export');
     Route::get('/reviews', [\App\Http\Controllers\Api\V1\ReviewController::class, 'index'])->name('reviews.index');

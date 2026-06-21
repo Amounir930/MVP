@@ -178,4 +178,54 @@ class SubscriptionBillingTest extends TestCase
         $response->assertStatus(200);
         $response->assertJsonPath('show_watermark', false);
     }
+
+    public function test_merchant_can_upgrade_via_billing_route(): void
+    {
+        $sub = Subscription::create([
+            'tenant_id' => $this->tenant->id,
+            'plan_name' => 'free',
+            'price' => 0.00,
+            'status' => 'active',
+            'current_period_start' => now(),
+            'current_period_end' => now()->addMonth(),
+            'monthly_limit' => 50,
+            'current_period_usage' => 10,
+        ]);
+
+        $response = $this->actingAs($this->merchant)->post('/billing/upgrade', [
+            'plan_name' => 'startup'
+        ]);
+
+        $response->assertRedirect();
+        $response->assertSessionHas('success');
+
+        $sub->refresh();
+        $this->assertEquals('startup', $sub->plan_name);
+        $this->assertEquals(99.00, (float)$sub->price);
+        $this->assertEquals(400, $sub->monthly_limit);
+        $this->assertEquals(0, $sub->current_period_usage);
+    }
+
+    public function test_new_user_registration_creates_free_subscription(): void
+    {
+        $response = $this->post('/register', [
+            'name' => 'New Merchant',
+            'email' => 'new@merchant.com',
+            'password' => 'Password123!',
+            'password_confirmation' => 'Password123!',
+        ]);
+
+        $response->assertRedirect('/dashboard');
+
+        $user = User::where('email', 'new@merchant.com')->first();
+        $this->assertNotNull($user);
+        $this->assertNotNull($user->tenant_id);
+
+        $subscription = Subscription::where('tenant_id', $user->tenant_id)->first();
+        $this->assertNotNull($subscription);
+        $this->assertEquals('free', $subscription->plan_name);
+        $this->assertEquals(0, $subscription->price);
+        $this->assertEquals(50, $subscription->monthly_limit);
+        $this->assertEquals('active', $subscription->status);
+    }
 }
