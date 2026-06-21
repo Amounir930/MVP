@@ -77,7 +77,7 @@ const submitManualSubscription = async () => {
     successMessage.value = '';
 
     try {
-        const response = await fetch('/admin/simulator/update-subscription', {
+        const response = await fetch('/superadmin/simulator/update-subscription', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -120,7 +120,7 @@ const triggerWebhookSimulation = async () => {
     successMessage.value = '';
 
     try {
-        const response = await fetch('/admin/simulator/trigger-webhook', {
+        const response = await fetch('/superadmin/simulator/trigger-webhook', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -185,7 +185,7 @@ const toggleStoreStatus = async (store: Store) => {
     errorMessage.value = '';
 
     try {
-        const response = await fetch(`/admin/stores/${store.id}/toggle`, {
+        const response = await fetch(`/superadmin/stores/${store.id}/toggle`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',

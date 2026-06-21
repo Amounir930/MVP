@@ -53,7 +53,7 @@ class SubscriptionBillingTest extends TestCase
 
     public function test_admin_can_manually_update_tenant_subscription(): void
     {
-        $response = $this->actingAs($this->admin)->postJson('/admin/simulator/update-subscription', [
+        $response = $this->actingAs($this->admin)->postJson('/superadmin/simulator/update-subscription', [
             'tenant_id' => $this->tenant->id,
             'plan_name' => 'startup',
             'status' => 'active',
@@ -74,7 +74,7 @@ class SubscriptionBillingTest extends TestCase
 
     public function test_admin_can_simulate_payment_webhook(): void
     {
-        $response = $this->actingAs($this->admin)->postJson('/admin/simulator/trigger-webhook', [
+        $response = $this->actingAs($this->admin)->postJson('/superadmin/simulator/trigger-webhook', [
             'tenant_id' => $this->tenant->id,
             'plan_name' => 'growth',
         ]);

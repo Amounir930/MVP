@@ -25,7 +25,7 @@ class AdminOverviewTest extends TestCase
             'is_admin' => false,
         ]);
 
-        $response = $this->actingAs($user)->get('/admin/overview');
+        $response = $this->actingAs($user)->get('/superadmin');
 
         $response->assertStatus(403);
     }
@@ -44,7 +44,7 @@ class AdminOverviewTest extends TestCase
             'is_admin' => true,
         ]);
 
-        $response = $this->actingAs($admin)->get('/admin/overview');
+        $response = $this->actingAs($admin)->get('/superadmin');
 
         $response->assertStatus(200);
         $response->assertInertia(fn ($page) => $page
@@ -72,7 +72,7 @@ class AdminOverviewTest extends TestCase
         $this->assertEquals('active', $tenant->status);
 
         // Toggle to suspended
-        $response = $this->actingAs($admin)->postJson("/admin/stores/{$tenant->id}/toggle");
+        $response = $this->actingAs($admin)->postJson("/superadmin/stores/{$tenant->id}/toggle");
 
         $response->assertStatus(200);
         $response->assertJson([
@@ -84,7 +84,7 @@ class AdminOverviewTest extends TestCase
         $this->assertEquals('suspended', $tenant->status);
 
         // Toggle back to active
-        $response = $this->actingAs($admin)->postJson("/admin/stores/{$tenant->id}/toggle");
+        $response = $this->actingAs($admin)->postJson("/superadmin/stores/{$tenant->id}/toggle");
 
         $response->assertStatus(200);
         $response->assertJson([
