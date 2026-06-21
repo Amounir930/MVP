@@ -42,14 +42,21 @@ Route::middleware('auth')->group(function () {
     Route::post('/reviews/{review}/reply', [\App\Http\Controllers\Api\V1\ReviewController::class, 'reply'])->name('reviews.reply');
     Route::put('/reviews/{review}/status', [\App\Http\Controllers\Api\V1\ReviewController::class, 'updateStatus'])->name('reviews.update-status');
     Route::delete('/reviews/{review}', [\App\Http\Controllers\Api\V1\ReviewController::class, 'destroy'])->name('reviews.destroy');
+});
 
-    // Super Admin platform routes
-    Route::middleware([\App\Http\Middleware\EnsureUserIsAdmin::class])->group(function () {
-        Route::get('/superadmin', [\App\Http\Controllers\Admin\AdminDashboardController::class, 'index'])->name('admin.overview');
-        Route::post('/superadmin/stores/{tenant}/toggle', [\App\Http\Controllers\Admin\AdminDashboardController::class, 'toggleStatus'])->name('admin.stores.toggle');
-        Route::post('/superadmin/simulator/update-subscription', [\App\Http\Controllers\Admin\AdminDashboardController::class, 'updateSubscription'])->name('admin.simulator.update-subscription');
-        Route::post('/superadmin/simulator/trigger-webhook', [\App\Http\Controllers\Admin\AdminDashboardController::class, 'triggerWebhook'])->name('admin.simulator.trigger-webhook');
-    });
+// Dedicated Super Admin Authentication routes (Independent for security separation)
+Route::middleware('guest')->group(function () {
+    Route::get('/superadmin/login', [\App\Http\Controllers\Admin\AdminLoginController::class, 'create'])->name('admin.login');
+    Route::post('/superadmin/login', [\App\Http\Controllers\Admin\AdminLoginController::class, 'store']);
+});
+
+// Super Admin platform routes (Protected by EnsureUserIsAdmin)
+Route::middleware([\App\Http\Middleware\EnsureUserIsAdmin::class])->group(function () {
+    Route::get('/superadmin', [\App\Http\Controllers\Admin\AdminDashboardController::class, 'index'])->name('admin.overview');
+    Route::post('/superadmin/stores/{tenant}/toggle', [\App\Http\Controllers\Admin\AdminDashboardController::class, 'toggleStatus'])->name('admin.stores.toggle');
+    Route::post('/superadmin/simulator/update-subscription', [\App\Http\Controllers\Admin\AdminDashboardController::class, 'updateSubscription'])->name('admin.simulator.update-subscription');
+    Route::post('/superadmin/simulator/trigger-webhook', [\App\Http\Controllers\Admin\AdminDashboardController::class, 'triggerWebhook'])->name('admin.simulator.trigger-webhook');
+    Route::post('/superadmin/logout', [\App\Http\Controllers\Admin\AdminLoginController::class, 'destroy'])->name('admin.logout');
 });
 
 require __DIR__.'/auth.php';

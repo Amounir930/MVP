@@ -41,13 +41,51 @@ class AuthenticationTest extends TestCase
     {
         $user = User::factory()->create(['is_admin' => true]);
 
-        $response = $this->post('/', [
+        $response = $this->post('/superadmin/login', [
             'email' => $user->email,
             'password' => 'password',
         ]);
 
         $this->assertAuthenticated();
         $response->assertRedirect(route('admin.overview', absolute: false));
+    }
+
+    public function test_admins_cannot_authenticate_via_merchant_login(): void
+    {
+        $user = User::factory()->create(['is_admin' => true]);
+
+        $response = $this->post('/', [
+            'email' => $user->email,
+            'password' => 'password',
+        ]);
+
+        $this->assertGuest();
+        $response->assertRedirect('/');
+        $response->assertSessionHasErrors('email');
+    }
+
+    public function test_merchants_cannot_authenticate_via_admin_login(): void
+    {
+        $user = User::factory()->create(['is_admin' => false]);
+
+        $response = $this->post('/superadmin/login', [
+            'email' => $user->email,
+            'password' => 'password',
+        ]);
+
+        $this->assertGuest();
+        $response->assertRedirect(route('admin.login'));
+        $response->assertSessionHasErrors('email');
+    }
+
+    public function test_admin_logout_redirects_to_admin_login(): void
+    {
+        $user = User::factory()->create(['is_admin' => true]);
+
+        $response = $this->actingAs($user)->post('/superadmin/logout');
+
+        $this->assertGuest();
+        $response->assertRedirect(route('admin.login'));
     }
 
     public function test_logged_in_admins_visiting_dashboard_are_redirected(): void

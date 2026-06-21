@@ -37,8 +37,8 @@ const showingNavigationDropdown = ref(false);
                                         </button>
                                     </template>
                                     <template #content>
-                                        <DropdownLink :href="route('profile.edit')" class="text-right">الملف الشخصي</DropdownLink>
-                                        <DropdownLink :href="route('logout')" method="post" as="button" class="text-right text-rose-600 dark:text-rose-400 font-bold">تسجيل الخروج</DropdownLink>
+                                        <DropdownLink v-if="!$page.props.auth.user.is_admin" :href="route('profile.edit')" class="text-right">الملف الشخصي</DropdownLink>
+                                        <DropdownLink :href="$page.props.auth.user.is_admin ? route('admin.logout') : route('logout')" method="post" as="button" class="text-right text-rose-600 dark:text-rose-400 font-bold">تسجيل الخروج</DropdownLink>
                                     </template>
                                 </Dropdown>
                             </div>
@@ -46,13 +46,14 @@ const showingNavigationDropdown = ref(false);
                             <!-- Right Section (Logo & Links) -->
                             <div class="flex items-center gap-8">
                                 <!-- Logo -->
-                                <Link :href="route('dashboard')" class="flex shrink-0 items-center">
+                                <Link :href="$page.props.auth.user.is_admin ? route('admin.overview') : route('dashboard')" class="flex shrink-0 items-center">
                                     <ApplicationLogo class="block h-7 w-auto fill-current text-gray-800 dark:text-gray-200 hover:opacity-80 transition-opacity duration-200" />
                                 </Link>
 
                                 <!-- Navigation Links -->
                                 <div class="hidden sm:flex sm:items-center sm:gap-6" dir="rtl">
                                     <Link 
+                                        v-if="!$page.props.auth.user.is_admin"
                                         :href="route('dashboard')" 
                                         :class="route().current('dashboard') 
                                             ? 'text-indigo-650 dark:text-indigo-400 font-bold' 
@@ -92,11 +93,11 @@ const showingNavigationDropdown = ref(false);
             <!-- Mobile menu -->
             <div :class="{ block: showingNavigationDropdown, hidden: !showingNavigationDropdown }" class="sm:hidden fixed inset-x-4 top-24 z-50 bg-white/95 dark:bg-[#1C1C1E]/95 backdrop-blur-xl border border-white/25 dark:border-white/5 rounded-2xl shadow-xl p-4 transition-all duration-300">
                 <div class="space-y-3" dir="rtl">
-                    <Link :href="route('dashboard')" class="block px-4 py-2.5 rounded-xl text-sm font-bold text-gray-800 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#2C2C2E]">لوحة تحكم التاجر</Link>
+                    <Link v-if="!$page.props.auth.user.is_admin" :href="route('dashboard')" class="block px-4 py-2.5 rounded-xl text-sm font-bold text-gray-800 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#2C2C2E]">لوحة تحكم التاجر</Link>
                     <Link v-if="$page.props.auth.user.is_admin" :href="route('admin.overview')" class="block px-4 py-2.5 rounded-xl text-sm font-bold text-gray-800 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#2C2C2E]">لوحة الإشراف العام</Link>
                     <div class="border-t border-gray-100 dark:border-gray-800 my-2"></div>
-                    <Link :href="route('profile.edit')" class="block px-4 py-2.5 rounded-xl text-sm font-bold text-gray-800 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#2C2C2E]">الملف الشخصي</Link>
-                    <Link :href="route('logout')" method="post" as="button" class="block w-full text-right px-4 py-2.5 rounded-xl text-sm font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/20">تسجيل الخروج</Link>
+                    <Link v-if="!$page.props.auth.user.is_admin" :href="route('profile.edit')" class="block px-4 py-2.5 rounded-xl text-sm font-bold text-gray-800 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#2C2C2E]">الملف الشخصي</Link>
+                    <Link :href="$page.props.auth.user.is_admin ? route('admin.logout') : route('logout')" method="post" as="button" class="block w-full text-right px-4 py-2.5 rounded-xl text-sm font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/20">تسجيل الخروج</Link>
                 </div>
             </div>
 

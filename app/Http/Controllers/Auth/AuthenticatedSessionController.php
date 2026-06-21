@@ -38,7 +38,13 @@ class AuthenticatedSessionController extends Controller
         $request->session()->regenerate();
 
         if ($request->user() && $request->user()->is_admin) {
-            return redirect()->route('admin.overview');
+            Auth::guard('web')->logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            return redirect('/')->withErrors([
+                'email' => 'هذه الصفحة مخصصة للتجار فقط. يرجى استخدام صفحة تسجيل الدخول الخاصة بالسوبر أدمن.',
+            ]);
         }
 
         return redirect()->intended(route('dashboard', absolute: false));
