@@ -28,7 +28,7 @@ class TenantScope implements Scope
 
         // Fallback to authenticated user tenant reference context
         // We use hasUser() to prevent infinite recursion during user resolution
-        if (Auth::guard()->hasUser() && Auth::user()->tenant_id) {
+        if (Auth::guard()->hasUser() && Auth::user()->tenant_id && !Auth::user()->is_admin) {
             $builder->where($model->getTable() . '.tenant_id', Auth::user()->tenant_id);
         }
     }
