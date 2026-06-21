@@ -300,6 +300,14 @@ const submitForgotPassword = () => {
                             <p class="text-xs text-slate-500 mt-1">أنشئ حساباً جديداً لربط متجرك وبدء أتمتة مراجعات العملاء</p>
                         </div>
 
+                        <!-- Under Testing Alert Banner -->
+                        <div class="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-bold text-center flex items-center justify-center gap-2" dir="rtl">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-4 h-4 text-amber-700">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3Z" />
+                            </svg>
+                            <span>المنصة تحت الاختبار، كافة الحسابات مجانية بالكامل حالياً.</span>
+                        </div>
+
                         <!-- Flash Messages -->
                         <div v-if="flash.error" class="p-4 mb-4 text-sm text-red-800 rounded-2xl bg-red-50 font-semibold text-right animate-fade-in" dir="rtl">
                             {{ flash.error }}
