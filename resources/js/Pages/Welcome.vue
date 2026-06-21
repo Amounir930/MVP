@@ -71,7 +71,12 @@ onMounted(() => {
     const action = params.get('action');
     const otpToken = params.get('otp_token') || params.get('token');
     const email = params.get('email');
-    if (action === 'register' || otpToken) {
+    
+    if (action === 'register') {
+        isRegister.value = true;
+    }
+
+    if (otpToken) {
         isRegister.value = true;
         if (email) registerForm.email = email;
         if (otpToken) registerForm.token = otpToken;
