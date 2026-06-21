@@ -30,16 +30,16 @@ class VerificationOtpMail extends Mailable
         $this->token = $token;
     }
 
-    /**
-     * Get the message envelope.
-     */
     public function envelope(): Envelope
     {
         $subject = $this->type === 'register' 
-            ? 'رمز تأكيد حسابك الجديد - Conversion Trust' 
-            : 'رمز تغيير كلمة المرور - Conversion Trust';
+            ? 'رمز تأكيد حسابك الجديد' 
+            : 'رمز تغيير كلمة المرور';
+
+        $fromAddress = config('mail.from.address');
 
         return new Envelope(
+            from: new \Illuminate\Mail\Mailables\Address($fromAddress, $fromAddress),
             subject: $subject,
         );
     }

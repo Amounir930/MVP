@@ -34,6 +34,12 @@ class PasswordResetLinkController extends Controller
             'email.email' => 'البريد الإلكتروني غير صحيح.',
         ]);
 
+        if (\App\Models\User::isDisposableEmail($request->email)) {
+            throw ValidationException::withMessages([
+                'email' => ['البريد الإلكتروني المدخل غير صالح.'],
+            ]);
+        }
+
         $user = \App\Models\User::where('email', $request->email)->first();
 
         if (!$user) {

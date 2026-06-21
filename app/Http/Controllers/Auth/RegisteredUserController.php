@@ -59,6 +59,12 @@ class RegisteredUserController extends Controller
             'email.email' => 'البريد الإلكتروني غير صحيح.',
         ]);
 
+        if (User::isDisposableEmail($request->email)) {
+            throw ValidationException::withMessages([
+                'email' => ['غير مسموح بالتسجيل باستخدام البريد الإلكتروني المؤقت أو الوهمي.'],
+            ]);
+        }
+
         $otpData = User::sendOtpCode($request->email, 'register', generateToken: true);
 
         return back()
@@ -90,6 +96,12 @@ class RegisteredUserController extends Controller
             'code.required' => 'رمز التأكيد مطلوب.',
             'code.size' => 'يجب أن يتكون رمز التأكيد من 6 أرقام.',
         ]);
+
+        if (User::isDisposableEmail($request->email)) {
+            throw ValidationException::withMessages([
+                'email' => ['غير مسموح بالتسجيل باستخدام البريد الإلكتروني المؤقت أو الوهمي.'],
+            ]);
+        }
 
         // Verify OTP and token
         $otpRecord = \App\Models\VerificationCode::where('email', $request->email)

@@ -111,4 +111,53 @@ class User extends Authenticatable
     {
         return self::sendOtpCode($this->email, $type, false);
     }
+
+    public static function isDisposableEmail(string $email): bool
+    {
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            return true;
+        }
+
+        $domain = strtolower(substr(strrchr($email, "@"), 1));
+        
+        $disposableDomains = [
+            'temp-mail.org', 'tempmail.com', 'temp-mail.com', 'temp-mail.ru', 'tempmail.net',
+            'yopmail.com', 'yopmail.fr', 'yopmail.net', 'cool.fr.nf', 'jetable.fr.nf', 'courriel.fr.nf',
+            'mailinator.com', 'mailinator.net', 'mailinator2.com',
+            'guerrillamail.com', 'guerrillamail.net', 'guerrillamail.org', 'guerrillamail.biz', 'grr.la', 'guerillamail.info', 'guerillamailblock.com', 'pokemail.net', 'spam4.me',
+            '10minutemail.com', '10minutemail.net', '10minutemail.co.za', '10minutemail.be',
+            'trashmail.com', 'trashmail.net', 'trashmail.me',
+            'sharklasers.com', 'maildrop.cc', 'mailnesia.com', 'mailcatch.com', 'mailnull.com',
+            'dispostable.com', 'getairmail.com', 'throwawaymail.com', 'tempmailaddress.com',
+            'generator.email', 'temporary-mail.net', 'tempmailo.com', 'tempr.email',
+            'mohmal.com', 'mohmal.in', 'tempmail.dev', 'emailondeck.com', 'burnermail.io',
+            'aratrin.com', 'boun.cr', 'safetymail.info', 'inboxkitten.com', 'disposable.com',
+            'mintemail.com', 'spambox.us', 'fakeinbox.com', 'mytrashmail.com', '027168.com',
+            'crazymailing.com', 'zillamail.com', 'mailzilla.org', 'inboxkitten.com',
+            'tempmail.live', 'tempmail.ninja', 'tempmail.red', 'tempmail.cash', 'tempmail.lol',
+            'temp-mail.io', 'tempmail.host', 'tempmail.top', 'tempmail.website', 'disposablemail.com',
+            'fakemailgenerator.com', 'guerrillamail.de', 'tmpmail.org', 'tmpmail.com', 'tmpmail.net',
+            'mailtemp.org', 'mailtemp.net', 'mailtemp.com', 'mailtostemp.com', 'mailtostemp.org',
+            'mailtostemp.net', 'mailtostemp.dev', 'mailtostemp.guru', 'mailtostemp.club',
+            'mailtostemp.asia', 'mailtostemp.us', 'mailtostemp.co'
+        ];
+
+        if (in_array($domain, $disposableDomains)) {
+            return true;
+        }
+
+        // Match common spam/disposable keywords in domain name
+        if (preg_match('/(tempmail|disposablemail|tmpmail|mailtemp|mailtostemp|yopmail|mailinator|guerrillamail)/i', $domain)) {
+            return true;
+        }
+
+        // Verify active email servers using MX records (skip during testing to prevent network dependencies in unit tests)
+        if (!app()->environment('testing')) {
+            if (!checkdnsrr($domain, 'MX')) {
+                return true;
+            }
+        }
+
+        return false;
+    }
 }

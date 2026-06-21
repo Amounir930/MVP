@@ -115,4 +115,23 @@ class RegistrationTest extends TestCase
             'type' => 'register',
         ]);
     }
+
+    public function test_disposable_and_spam_emails_are_rejected(): void
+    {
+        // 1. Blacklisted domains
+        $this->assertTrue(User::isDisposableEmail('test@temp-mail.org'));
+        $this->assertTrue(User::isDisposableEmail('test@aratrin.com'));
+        $this->assertTrue(User::isDisposableEmail('test@mailinator.com'));
+
+        // 2. Keyword patterns matching
+        $this->assertTrue(User::isDisposableEmail('test@mytempmail.org'));
+        $this->assertTrue(User::isDisposableEmail('test@sometmpmail.net'));
+        $this->assertTrue(User::isDisposableEmail('test@disposablemail123.com'));
+
+        // 3. Normal / official domains (bypassing MX record check in test env)
+        $this->assertFalse(User::isDisposableEmail('test@gmail.com'));
+        $this->assertFalse(User::isDisposableEmail('test@yahoo.com'));
+        $this->assertFalse(User::isDisposableEmail('test@outlook.com'));
+        $this->assertFalse(User::isDisposableEmail('merchant@example.com'));
+    }
 }
