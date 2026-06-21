@@ -60,6 +60,17 @@ class User extends Authenticatable
             ]);
         }
 
+        $oneDayAgo = now()->subDay();
+        $recentInDayCount = \App\Models\VerificationCode::where('email', $email)
+            ->where('created_at', '>=', $oneDayAgo)
+            ->count();
+
+        if ($recentInDayCount >= 7) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'email' => ['لقد تجاوزت الحد الأقصى لإرسال الرموز (7 مرات في اليوم). يرجى المحاولة غداً.'],
+            ]);
+        }
+
         // Invalidate all previous active codes for this email and type by expiring them immediately (burning the old code)
         \App\Models\VerificationCode::where('email', $email)
             ->where('type', $type)

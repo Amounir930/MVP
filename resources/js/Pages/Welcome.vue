@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import Checkbox from '@/Components/Checkbox.vue';
 import InputError from '@/Components/InputError.vue';
 import InputLabel from '@/Components/InputLabel.vue';
@@ -41,6 +41,25 @@ const requestLinkForm = useForm({
 const otpSentSuccessfully = ref(false);
 const otpSuccessMessage = ref('');
 const otpError = ref('');
+
+const countdown = ref(0);
+let countdownIntervalId: any = null;
+
+const startCountdown = () => {
+    countdown.value = 60;
+    if (countdownIntervalId) clearInterval(countdownIntervalId);
+    countdownIntervalId = setInterval(() => {
+        if (countdown.value > 0) {
+            countdown.value--;
+        } else {
+            clearInterval(countdownIntervalId);
+        }
+    }, 1000);
+};
+
+onUnmounted(() => {
+    if (countdownIntervalId) clearInterval(countdownIntervalId);
+});
 
 onMounted(() => {
     const params = new URLSearchParams(window.location.search);
@@ -88,6 +107,7 @@ const submitRequestLink = () => {
                 otpSentSuccessfully.value = true;
                 otpSuccessMessage.value = flash.success;
                 registerForm.token = flash.otp_token || '';
+                startCountdown();
             } else if (flash && flash.error) {
                 otpError.value = flash.error;
             }
@@ -313,11 +333,16 @@ const submitForgotPassword = () => {
                                     <button
                                         type="button"
                                         @click="submitRequestLink"
-                                        class="mt-1 px-4 py-2 border border-indigo-600 text-xs font-bold rounded-2xl text-indigo-600 hover:bg-indigo-50 transition focus:outline-none disabled:opacity-50 flex items-center justify-center shrink-0"
-                                        :disabled="requestLinkForm.processing"
+                                        class="mt-1 px-4 py-2 border border-indigo-600 text-xs font-bold rounded-2xl text-indigo-600 hover:bg-indigo-50 transition focus:outline-none disabled:opacity-50 flex items-center justify-center shrink-0 min-w-[100px]"
+                                        :disabled="requestLinkForm.processing || countdown > 0"
                                     >
                                         <svg v-if="requestLinkForm.processing" class="animate-spin -ms-1 me-2 h-3.5 w-3.5 text-indigo-600" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
-                                        {{ otpSentSuccessfully ? 'إعادة إرسال' : 'تحقيق' }}
+                                        <span v-if="countdown > 0">
+                                            الانتظار {{ countdown }}ث
+                                        </span>
+                                        <span v-else>
+                                            {{ otpSentSuccessfully ? 'إعادة إرسال' : 'تحقيق' }}
+                                        </span>
                                     </button>
                                 </div>
                                 <InputError class="mt-2" :message="registerForm.errors.email || requestLinkForm.errors.email" />
