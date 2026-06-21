@@ -29,7 +29,6 @@ Route::middleware('auth')->group(function () {
 
     // WhatsApp integration configuration routes (Evolution API)
     Route::get('/auth/whatsapp/connect', [\App\Http\Controllers\Api\V1\WhatsAppConfigController::class, 'connect'])->name('whatsapp.connect');
-    Route::get('/auth/whatsapp/status', [\App\Http\Controllers\Api\V1\WhatsAppConfigController::class, 'status'])->name('whatsapp.status');
     Route::post('/auth/whatsapp/disconnect', [\App\Http\Controllers\Api\V1\WhatsAppConfigController::class, 'disconnect'])->name('whatsapp.disconnect');
     Route::post('/auth/whatsapp/settings', [\App\Http\Controllers\Api\V1\WhatsAppConfigController::class, 'updateSettings'])->name('whatsapp.settings.update');
 
@@ -61,5 +60,8 @@ Route::middleware([\App\Http\Middleware\EnsureUserIsAdmin::class])->group(functi
     Route::post('/superadmin/simulator/trigger-webhook', [\App\Http\Controllers\Admin\AdminDashboardController::class, 'triggerWebhook'])->name('admin.simulator.trigger-webhook');
     Route::post('/superadmin/logout', [\App\Http\Controllers\Admin\AdminLoginController::class, 'destroy'])->name('admin.logout');
 });
+
+// WhatsApp status polling route made guest-accessible to prevent authentication redirect loops on session expiry
+Route::get('/auth/whatsapp/status', [\App\Http\Controllers\Api\V1\WhatsAppConfigController::class, 'status'])->name('whatsapp.status');
 
 require __DIR__.'/auth.php';

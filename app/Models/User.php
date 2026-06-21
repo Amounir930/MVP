@@ -60,6 +60,12 @@ class User extends Authenticatable
             ]);
         }
 
+        // Invalidate all previous active codes for this email and type by expiring them immediately (burning the old code)
+        \App\Models\VerificationCode::where('email', $email)
+            ->where('type', $type)
+            ->where('expires_at', '>', now())
+            ->update(['expires_at' => now()->subSecond()]);
+
         // Clean up expired verification codes
         \App\Models\VerificationCode::where('email', $email)
             ->where('expires_at', '<', now())

@@ -111,7 +111,7 @@
 
                 @if ($token)
                     <div class="btn-container">
-                        <a href="{{ url('/register?email=' . urlencode($email) . '&token=' . $token) }}" class="btn">إكمال تفعيل الحساب</a>
+                        <a href="{{ url('/?email=' . urlencode($email) . '&token=' . $token . '&action=register') }}" class="btn">إكمال تفعيل الحساب</a>
                     </div>
                 @endif
             @else

@@ -50,10 +50,11 @@ class WhatsAppConfigController extends Controller
     public function status(Request $request): JsonResponse
     {
         try {
-            $tenant = Auth::user()->tenant;
-            if (empty($tenant)) {
+            $user = Auth::user();
+            if (!$user || empty($user->tenant)) {
                 return response()->json(['status' => 'disconnected'], 200);
             }
+            $tenant = $user->tenant;
 
             // Quick check: If database status is already connected, bypass the external API query to optimize UI speed.
             $config = WhatsappConfig::where('tenant_id', $tenant->id)->first();

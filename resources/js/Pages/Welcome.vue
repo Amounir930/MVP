@@ -24,10 +24,40 @@ const flash = computed(() => (page.props.flash as any) || {});
 const isRegister = ref(false);
 const showForgotPassword = ref(false);
 
+// Register Form Config
+const registerForm = useForm({
+    name: '',
+    email: '',
+    code: '',
+    password: '',
+    password_confirmation: '',
+    token: '',
+});
+
+const requestLinkForm = useForm({
+    email: '',
+});
+
+const otpSentSuccessfully = ref(false);
+const otpSuccessMessage = ref('');
+const otpError = ref('');
+
 onMounted(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('action') === 'forgot-password' || params.has('forgot-password')) {
         showForgotPassword.value = true;
+    }
+
+    // Auto-fill register form if coming from the email link
+    const action = params.get('action');
+    const otpToken = params.get('otp_token') || params.get('token');
+    const email = params.get('email');
+    if (action === 'register' || otpToken) {
+        isRegister.value = true;
+        if (email) registerForm.email = email;
+        if (otpToken) registerForm.token = otpToken;
+        otpSentSuccessfully.value = true;
+        otpSuccessMessage.value = 'تم ملء البريد الإلكتروني تلقائياً. يرجى إدخال رمز التأكيد وباقي البيانات.';
     }
 });
 
@@ -46,16 +76,36 @@ const submitLogin = () => {
     });
 };
 
-// Register Form Config
-const requestLinkForm = useForm({
-    email: '',
-});
-const activationLinkSent = ref(false);
-
 const submitRequestLink = () => {
+    otpError.value = '';
+    otpSuccessMessage.value = '';
+    requestLinkForm.email = registerForm.email;
+    
     requestLinkForm.post(route('register.request-link'), {
-        onSuccess: () => {
-            activationLinkSent.value = true;
+        onSuccess: (page: any) => {
+            const flash = page.props.flash as any;
+            if (flash && flash.success) {
+                otpSentSuccessfully.value = true;
+                otpSuccessMessage.value = flash.success;
+                registerForm.token = flash.otp_token || '';
+            } else if (flash && flash.error) {
+                otpError.value = flash.error;
+            }
+        },
+        onError: (errors: any) => {
+            otpError.value = errors.email || 'حدث خطأ أثناء إرسال الكود.';
+        }
+    });
+};
+
+const submitRegister = () => {
+    // If the token is available in flash, assign it
+    if (page.props.flash && (page.props.flash as any).otp_token) {
+        registerForm.token = (page.props.flash as any).otp_token;
+    }
+    registerForm.post(route('register'), {
+        onFinish: () => {
+            registerForm.reset('password', 'password_confirmation');
         },
     });
 };
@@ -222,54 +272,118 @@ const submitForgotPassword = () => {
                     <div v-else-if="isRegister && !showForgotPassword" class="space-y-5 animate-fade-in">
                         <div class="text-right mb-4">
                             <h2 class="text-xl font-bold text-slate-800">ابدأ رحلتك معنا!</h2>
-                            <p class="text-xs text-slate-500 mt-1">طلب رابط تفعيل لإكمال إنشاء حساب التاجر الخاص بك</p>
+                            <p class="text-xs text-slate-500 mt-1">أنشئ حساباً جديداً لربط متجرك وبدء أتمتة مراجعات العملاء</p>
                         </div>
 
                         <!-- Flash Messages -->
-                        <div v-if="flash.success" class="p-4 mb-4 text-sm text-green-800 rounded-2xl bg-green-50 font-semibold text-right animate-fade-in" dir="rtl">
-                            {{ flash.success }}
-                        </div>
                         <div v-if="flash.error" class="p-4 mb-4 text-sm text-red-800 rounded-2xl bg-red-50 font-semibold text-right animate-fade-in" dir="rtl">
                             {{ flash.error }}
                         </div>
 
-                        <div v-if="activationLinkSent" class="bg-indigo-50/50 border border-indigo-100 rounded-2xl p-6 text-right space-y-4 animate-fade-in" dir="rtl">
-                            <p class="text-sm text-indigo-900 font-semibold leading-relaxed">
-                                تم إرسال رابط التفعيل بنجاح إلى: <br><span class="text-indigo-700 font-bold font-mono">{{ requestLinkForm.email }}</span>
-                            </p>
-                            <p class="text-xs text-slate-600 leading-relaxed">
-                                يرجى التحقق من علبة الوارد (أو مجلد البريد المهمل) والضغط على زر التفعيل المرفق لإكمال التسجيل.
-                            </p>
-                            <button 
-                                @click="activationLinkSent = false" 
-                                class="text-xs text-indigo-600 hover:text-indigo-700 font-bold focus:outline-none underline"
-                            >
-                                طلب إرسال الرابط مجدداً
-                            </button>
-                        </div>
-
-                        <form v-else @submit.prevent="submitRequestLink" class="space-y-4">
+                        <form @submit.prevent="submitRegister" class="space-y-4 text-right" dir="rtl">
+                            <!-- Full Name -->
                             <div>
-                                <InputLabel for="reg_email" value="البريد الإلكتروني للتاجر" class="text-slate-700 font-semibold mb-1" />
+                                <InputLabel for="reg_name" value="الاسم الكامل" class="text-slate-700 font-semibold mb-1" />
                                 <TextInput
-                                    id="reg_email"
-                                    type="email"
+                                    id="reg_name"
+                                    type="text"
                                     class="mt-1 block w-full rounded-2xl bg-slate-50/80 border-slate-200 text-slate-900 focus:border-indigo-500 focus:ring-indigo-500"
-                                    v-model="requestLinkForm.email"
+                                    v-model="registerForm.name"
                                     required
-                                    placeholder="name@example.com"
-                                    autocomplete="username"
+                                    placeholder="عبد الله محمد"
+                                    autocomplete="name"
                                 />
-                                <InputError class="mt-2" :message="requestLinkForm.errors.email" />
+                                <InputError class="mt-2" :message="registerForm.errors.name" />
                             </div>
 
+                            <!-- Email -->
+                            <div>
+                                <InputLabel for="reg_email" value="البريد الإلكتروني" class="text-slate-700 font-semibold mb-1" />
+                                <div class="flex gap-2">
+                                    <TextInput
+                                        id="reg_email"
+                                        type="email"
+                                        class="mt-1 block w-full rounded-2xl bg-slate-50/80 border-slate-200 text-slate-900 focus:border-indigo-500 focus:ring-indigo-500"
+                                        :class="{'bg-slate-100/85 text-slate-550 cursor-not-allowed': otpSentSuccessfully}"
+                                        v-model="registerForm.email"
+                                        required
+                                        placeholder="name@example.com"
+                                        :disabled="otpSentSuccessfully"
+                                    />
+                                    <button
+                                        type="button"
+                                        @click="submitRequestLink"
+                                        class="mt-1 px-4 py-2 border border-indigo-600 text-xs font-bold rounded-2xl text-indigo-600 hover:bg-indigo-50 transition focus:outline-none disabled:opacity-50 flex items-center justify-center shrink-0"
+                                        :disabled="requestLinkForm.processing"
+                                    >
+                                        <svg v-if="requestLinkForm.processing" class="animate-spin -ms-1 me-2 h-3.5 w-3.5 text-indigo-600" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                                        {{ otpSentSuccessfully ? 'إعادة إرسال' : 'تحقيق' }}
+                                    </button>
+                                </div>
+                                <InputError class="mt-2" :message="registerForm.errors.email || requestLinkForm.errors.email" />
+                                
+                                <!-- OTP Code Status Messages -->
+                                <p v-if="otpSuccessMessage" class="mt-2 text-xs text-emerald-600 font-semibold leading-relaxed">
+                                    {{ otpSuccessMessage }}
+                                </p>
+                                <p v-if="otpError" class="mt-2 text-xs text-rose-600 font-semibold leading-relaxed">
+                                    {{ otpError }}
+                                </p>
+                            </div>
+
+                            <!-- Verification Code (OTP) -->
+                            <div v-if="otpSentSuccessfully" class="animate-fade-in">
+                                <InputLabel for="reg_code" value="رمز التأكيد (6 أرقام)" class="text-slate-700 font-semibold mb-1" />
+                                <TextInput
+                                    id="reg_code"
+                                    type="text"
+                                    maxlength="6"
+                                    class="mt-1 block w-full rounded-2xl bg-slate-50/80 border-slate-200 text-slate-900 focus:border-indigo-500 focus:ring-indigo-500 text-center font-bold tracking-widest text-lg"
+                                    v-model="registerForm.code"
+                                    required
+                                    placeholder="000000"
+                                />
+                                <InputError class="mt-2" :message="registerForm.errors.code" />
+                            </div>
+
+                            <!-- Password -->
+                            <div>
+                                <InputLabel for="reg_password" value="كلمة المرور" class="text-slate-700 font-semibold mb-1" />
+                                <TextInput
+                                    id="reg_password"
+                                    type="password"
+                                    class="mt-1 block w-full rounded-2xl bg-slate-50/80 border-slate-200 text-slate-900 focus:border-indigo-500 focus:ring-indigo-500"
+                                    v-model="registerForm.password"
+                                    required
+                                    placeholder="••••••••"
+                                    autocomplete="new-password"
+                                />
+                                <InputError class="mt-2" :message="registerForm.errors.password" />
+                            </div>
+
+                            <!-- Confirm Password -->
+                            <div>
+                                <InputLabel for="reg_password_confirmation" value="تأكيد كلمة المرور" class="text-slate-700 font-semibold mb-1" />
+                                <TextInput
+                                    id="reg_password_confirmation"
+                                    type="password"
+                                    class="mt-1 block w-full rounded-2xl bg-slate-50/80 border-slate-200 text-slate-900 focus:border-indigo-500 focus:ring-indigo-500"
+                                    v-model="registerForm.password_confirmation"
+                                    required
+                                    placeholder="••••••••"
+                                    autocomplete="new-password"
+                                />
+                                <InputError class="mt-2" :message="registerForm.errors.password_confirmation" />
+                            </div>
+
+                            <!-- Submit Register Button -->
                             <button
                                 type="submit"
-                                class="w-full flex items-center justify-center px-6 py-3.5 border border-transparent text-sm font-bold rounded-2xl text-white bg-indigo-600 hover:bg-indigo-700 transition shadow-[0_4px_16px_0_rgba(99,102,241,0.2)] disabled:opacity-50 mt-2"
-                                :disabled="requestLinkForm.processing"
+                                class="w-full flex items-center justify-center px-6 py-3.5 border border-transparent text-sm font-bold rounded-2xl text-white bg-indigo-600 hover:bg-indigo-700 transition shadow-[0_4px_16px_0_rgba(99,102,241,0.2)] disabled:opacity-50 mt-4"
+                                :disabled="registerForm.processing || (otpSentSuccessfully && !registerForm.code)"
                             >
-                                <svg v-if="requestLinkForm.processing" class="animate-spin -ms-1 me-3 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
-                                إرسال رابط تفعيل الحساب
+                                <svg v-if="registerForm.processing" class="animate-spin -ms-1 me-3 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                                إنشاء حساب جديد
                             </button>
                         </form>
                     </div>

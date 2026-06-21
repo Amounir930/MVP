@@ -110,6 +110,7 @@ class HandleInertiaRequests extends Middleware
                 'error' => $request->session()->get('error'),
                 'status' => $request->session()->get('status'),
                 'email' => $request->session()->get('email'),
+                'otp_token' => $request->session()->get('otp_token'),
             ],
             'salla' => [
                 'connected' => $sallaConnected,

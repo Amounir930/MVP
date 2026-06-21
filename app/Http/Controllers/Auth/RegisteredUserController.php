@@ -8,6 +8,7 @@ use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rules;
 use Illuminate\Validation\ValidationException;
@@ -25,7 +26,7 @@ class RegisteredUserController extends Controller
         $token = $request->query('token');
 
         if (!$email || !$token) {
-            return redirect('/')->with('error', 'يرجى طلب رابط تفعيل أولاً لتسجيل حساب جديد.');
+            return redirect('/')->with('error', 'يرجى طلب رمز تحقق أولاً لتسجيل حساب جديد.');
         }
 
         $valid = \App\Models\VerificationCode::where('email', $email)
@@ -35,12 +36,13 @@ class RegisteredUserController extends Controller
             ->exists();
 
         if (!$valid) {
-            return redirect('/')->with('error', 'رابط التفعيل غير صالح أو انتهت صلاحيته. يرجى طلب رابط جديد.');
+            return redirect('/')->with('error', 'رمز التفعيل غير صالح أو انتهت صلاحيته. يرجى طلب رمز جديد.');
         }
 
-        return Inertia::render('Auth/Register', [
+        return redirect()->route('login', [
+            'action' => 'register',
             'email' => $email,
-            'token' => $token,
+            'otp_token' => $token,
         ]);
     }
 
@@ -57,12 +59,13 @@ class RegisteredUserController extends Controller
             'email.email' => 'البريد الإلكتروني غير صحيح.',
         ]);
 
-        User::sendOtpCode($request->email, 'register', generateToken: true);
+        $otpData = User::sendOtpCode($request->email, 'register', generateToken: true);
 
         return back()
             ->with('status', 'activation-sent')
             ->with('email', $request->email)
-            ->with('success', 'تم إرسال رابط التفعيل ورمز التأكيد بنجاح إلى بريدك الإلكتروني.');
+            ->with('otp_token', $otpData['token'])
+            ->with('success', 'تم إرسال رمز التأكيد بنجاح إلى بريدك الإلكتروني.');
     }
 
     /**
@@ -102,32 +105,37 @@ class RegisteredUserController extends Controller
             ]);
         }
 
-        $tenant = \App\Models\Tenant::create([
-            'name' => $request->name . ' Store',
-        ]);
+        // Run the creation of Tenant, Subscription, and User inside a database transaction to prevent high concurrency race conditions
+        $user = DB::transaction(function () use ($request, $otpRecord) {
+            $tenant = \App\Models\Tenant::create([
+                'name' => $request->name . ' Store',
+            ]);
 
-        \App\Models\Subscription::create([
-            'tenant_id' => $tenant->id,
-            'plan_name' => 'free',
-            'price' => 0.00,
-            'status' => 'active',
-            'current_period_start' => now(),
-            'current_period_end' => now()->addMonth(),
-            'monthly_limit' => 50,
-            'current_period_usage' => 0,
-            'gateway_token' => 'free_signup_' . uniqid(),
-        ]);
+            \App\Models\Subscription::create([
+                'tenant_id' => $tenant->id,
+                'plan_name' => 'free',
+                'price' => 0.00,
+                'status' => 'active',
+                'current_period_start' => now(),
+                'current_period_end' => now()->addMonth(),
+                'monthly_limit' => 50,
+                'current_period_usage' => 0,
+                'gateway_token' => 'free_signup_' . uniqid(),
+            ]);
 
-        $user = User::create([
-            'name' => $request->name,
-            'email' => $request->email,
-            'password' => Hash::make($request->password),
-            'tenant_id' => $tenant->id,
-            'email_verified_at' => now(),
-        ]);
+            $user = User::create([
+                'name' => $request->name,
+                'email' => $request->email,
+                'password' => Hash::make($request->password),
+                'tenant_id' => $tenant->id,
+                'email_verified_at' => now(),
+            ]);
 
-        // Delete the verified OTP
-        $otpRecord->delete();
+            // Delete the verified OTP inside transaction so it is atomically burned
+            $otpRecord->delete();
+
+            return $user;
+        });
 
         event(new Registered($user));
 
