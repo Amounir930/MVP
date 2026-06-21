@@ -603,11 +603,43 @@
                 margin: 0;
                 white-space: pre-wrap;
             }
+            .ct-watermark {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                margin-top: 24px;
+                padding-top: 16px;
+                border-top: 1px solid #f3f4f6;
+                font-size: 11px;
+                color: #9ca3af;
+                font-weight: 600;
+            }
+            .ct-watermark-link {
+                color: #4f46e5;
+                text-decoration: none;
+                margin-right: 4px;
+                font-weight: 700;
+            }
+            .ct-watermark-link:hover {
+                text-decoration: underline;
+            }
         `;
 
         const styleElement = document.createElement('style');
         styleElement.textContent = styles;
         shadow.appendChild(styleElement);
+
+        // Watermark HTML logic
+        const showWatermark = data.show_watermark !== false;
+        let watermarkHtml = '';
+        if (showWatermark) {
+            watermarkHtml = `
+                <div class="ct-watermark">
+                    <span>موثق عبر</span>
+                    <a class="ct-watermark-link" href="${backendUrl}" target="_blank">Conversion Trust</a>
+                </div>
+            `;
+        }
 
         // Build HTML template
         const template = `
@@ -628,6 +660,8 @@
                 <div class="ct-reviews-list">
                     ${reviewsHtml}
                 </div>
+
+                ${watermarkHtml}
             </div>
         `;
 

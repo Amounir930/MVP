@@ -30,6 +30,7 @@ class WidgetController extends Controller
 
         // Bypassing global tenant scope to locate the product globally
         $product = Product::withoutGlobalScopes()
+            ->with(['tenant.subscription'])
             ->where('salla_product_id', (string) $sallaProductId)
             ->first();
 
@@ -78,6 +79,9 @@ class WidgetController extends Controller
                 ];
             });
 
+            $tenant = $product->tenant;
+            $showWatermark = $tenant ? $tenant->shouldShowWatermark() : true;
+
             return [
                 'product' => [
                     'salla_product_id' => $product->salla_product_id,
@@ -90,6 +94,7 @@ class WidgetController extends Controller
                     'count' => $count,
                 ],
                 'reviews' => $reviewsData,
+                'show_watermark' => (bool) $showWatermark,
             ];
         });
 

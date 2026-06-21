@@ -49,6 +49,8 @@ Route::middleware('auth')->group(function () {
     Route::middleware([\App\Http\Middleware\EnsureUserIsAdmin::class])->group(function () {
         Route::get('/admin/overview', [\App\Http\Controllers\Admin\AdminDashboardController::class, 'index'])->name('admin.overview');
         Route::post('/admin/stores/{tenant}/toggle', [\App\Http\Controllers\Admin\AdminDashboardController::class, 'toggleStatus'])->name('admin.stores.toggle');
+        Route::post('/admin/simulator/update-subscription', [\App\Http\Controllers\Admin\AdminDashboardController::class, 'updateSubscription'])->name('admin.simulator.update-subscription');
+        Route::post('/admin/simulator/trigger-webhook', [\App\Http\Controllers\Admin\AdminDashboardController::class, 'triggerWebhook'])->name('admin.simulator.trigger-webhook');
     });
 });
 

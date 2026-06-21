@@ -102,4 +102,66 @@ class Tenant extends Model
     {
         return $this->hasMany(Review::class);
     }
+
+    /**
+     * Obtain the subscription associated with the tenant.
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\HasOne
+     */
+    public function subscription(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(Subscription::class);
+    }
+
+    /**
+     * Check if the tenant has an active subscription.
+     *
+     * @return bool
+     */
+    public function hasActiveSubscription(): bool
+    {
+        $sub = $this->subscription;
+        if (!$sub) {
+            return true; // Default to free plan active
+        }
+        return $sub->status === 'active' && $sub->current_period_end->isFuture();
+    }
+
+    /**
+     * Check if the message limit for the current subscription has been reached.
+     *
+     * @return bool
+     */
+    public function messageLimitReached(): bool
+    {
+        $sub = $this->subscription;
+        if (!$sub) {
+            $count = \App\Models\WhatsappMessageLog::where('tenant_id', $this->id)
+                ->whereMonth('created_at', now()->month)
+                ->whereYear('created_at', now()->year)
+                ->count();
+            return $count >= 50; // Default limit for free
+        }
+        
+        // If the subscription is expired or suspended, limit is reached
+        if ($sub->status !== 'active' || !$sub->current_period_end->isFuture()) {
+            return true;
+        }
+
+        return $sub->current_period_usage >= $sub->monthly_limit;
+    }
+
+    /**
+     * Check if the branding watermark should be displayed on the storefront widget.
+     *
+     * @return bool
+     */
+    public function shouldShowWatermark(): bool
+    {
+        $sub = $this->subscription;
+        if (!$sub) {
+            return true; // Free plan displays watermark
+        }
+        return in_array(strtolower($sub->plan_name), ['free']);
+    }
 }

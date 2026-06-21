@@ -37,6 +37,31 @@ class SendWhatsAppRatingMessageJob implements ShouldQueue
         // Enforce the tenant scope to isolate database operations
         App::bind('current_tenant_id', fn () => $this->order->tenant_id);
 
+        $order = $this->order->load(['customer', 'tenant']);
+        $tenant = $order->tenant;
+
+        if (empty($tenant)) {
+            Log::warning('WhatsApp rating message skipped: tenant context missing.', [
+                'order_id' => $this->order->id,
+            ]);
+            return;
+        }
+
+        if ($tenant->messageLimitReached()) {
+            Log::warning('WhatsApp rating message skipped: tenant message limit reached or subscription inactive.', [
+                'tenant_id' => $tenant->id,
+                'order_id' => $this->order->id,
+            ]);
+
+            \App\Models\WhatsappMessageLog::create([
+                'tenant_id' => $tenant->id,
+                'phone' => $order->customer ? $order->customer->phone : 'N/A',
+                'order_id' => $order->id,
+                'status' => 'failed',
+            ]);
+            return;
+        }
+
         // Avoid duplicate sending
         $sessionExists = WhatsappChatSession::where('order_id', $this->order->id)->exists();
         $reviewExists = \App\Models\Review::where('order_id', $this->order->id)->exists();
@@ -47,7 +72,6 @@ class SendWhatsAppRatingMessageJob implements ShouldQueue
             return;
         }
 
-        $order = $this->order->load(['customer', 'tenant']);
         $customer = $order->customer;
 
         if (empty($customer) || empty($customer->phone)) {
@@ -61,7 +85,6 @@ class SendWhatsAppRatingMessageJob implements ShouldQueue
         if (str_starts_with($phone, '00')) {
             $phone = substr($phone, 2);
         }
-        $tenant = $order->tenant;
 
         $whatsappConfig = \App\Models\WhatsappConfig::where('tenant_id', $tenant->id)->first();
         $customQuestions = $whatsappConfig ? $whatsappConfig->custom_questions : null;
@@ -132,6 +155,12 @@ class SendWhatsAppRatingMessageJob implements ShouldQueue
                 'order_id' => $order->id,
                 'status' => 'sent',
             ]);
+
+            // Increment the subscription usage if it exists
+            $sub = $tenant->subscription;
+            if ($sub) {
+                $sub->increment('current_period_usage');
+            }
 
             Log::info('WhatsApp chat session created/updated successfully.', [
                 'tenant_id' => $tenant->id,
