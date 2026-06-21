@@ -62,6 +62,9 @@ class EvolutionAPIDriver implements MessagingServiceInterface
                     ]);
                 }
 
+                // Wait 2 seconds for Evolution API to release database and resource locks
+                sleep(2);
+
                 // Retry instance creation
                 $response = Http::withHeaders(['apikey' => $globalKey])
                     ->timeout(10)

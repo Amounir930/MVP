@@ -12,7 +12,14 @@ const showingNavigationDropdown = ref(false);
 
 <template>
     <div>
-        <div class="min-h-screen bg-[#F5F5F7] dark:bg-[#000000] text-gray-900 dark:text-gray-100 transition-colors duration-300">
+        <div class="relative min-h-screen bg-gradient-to-br from-[#F8FAFC] via-[#F1F5F9] to-[#E2E8F0] dark:from-[#0B0F19] dark:via-[#111827] dark:to-[#030712] text-gray-900 dark:text-gray-100 transition-colors duration-300 overflow-hidden">
+            <!-- Ambient Decorative Glowing Circles (Light Theme) -->
+            <div class="absolute -top-40 -left-40 w-96 h-96 bg-indigo-500/10 rounded-full blur-[100px] pointer-events-none animate-pulse"></div>
+            <div class="absolute -bottom-40 -right-40 w-96 h-96 bg-blue-500/10 rounded-full blur-[100px] pointer-events-none animate-pulse" style="animation-delay: 2s;"></div>
+            
+            <!-- Subtle backdrop grid -->
+            <div class="absolute inset-0 bg-[linear-gradient(to_right,#0f172a05_1px,transparent_1px),linear-gradient(to_bottom,#0f172a05_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none dark:opacity-30"></div>
+
             <!-- Apple Style Floating Navigation Bar -->
             <div class="fixed top-4 left-4 right-4 z-50">
                 <nav class="mx-auto max-w-7xl bg-white/80 dark:bg-[#1C1C1E]/80 backdrop-blur-xl border border-white/25 dark:border-white/5 rounded-2xl shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] dark:shadow-[0_8px_32px_0_rgba(0,0,0,0.4)] transition-all duration-300">
