@@ -9,7 +9,10 @@ Route::get('login', function () {
     return redirect('/');
 });
 
-Route::get('/dashboard', function () {
+Route::get('/dashboard', function (Illuminate\Http\Request $request) {
+    if ($request->user() && $request->user()->is_admin) {
+        return redirect()->route('admin.overview');
+    }
     return Inertia::render('Dashboard');
 })->middleware(['auth', 'verified'])->name('dashboard');
 
