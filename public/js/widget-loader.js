@@ -147,6 +147,7 @@
 
                 if (hasElement || (Date.now() - startTime > 4000)) {
                     renderWidget(data);
+                    injectStructuredData(data);
                 } else {
                     setTimeout(checkDOMAndRender, 50);
                 }
@@ -668,5 +669,64 @@
         const contentContainer = document.createElement('div');
         contentContainer.innerHTML = template;
         shadow.appendChild(contentContainer);
+    }
+
+    // Inject JSON-LD Structured Data (Review Schema) for Google search snippets
+    function injectStructuredData(data) {
+        try {
+            const oldSchema = document.getElementById('conversion-trust-reviews-schema');
+            if (oldSchema) {
+                oldSchema.remove();
+            }
+
+            const product = data.product || {};
+            const stats = data.rating_stats || {};
+            const reviewsList = data.reviews || [];
+
+            if (!stats.count || stats.count === 0) return;
+
+            const schemaJson = {
+                "@context": "https://schema.org",
+                "@type": "Product",
+                "name": product.name || document.title,
+                "image": product.image_url || undefined,
+                "url": product.product_url || window.location.href,
+                "aggregateRating": {
+                    "@type": "AggregateRating",
+                    "ratingValue": stats.average.toString(),
+                    "reviewCount": stats.count.toString(),
+                    "bestRating": "5",
+                    "worstRating": "1"
+                }
+            };
+
+            if (reviewsList.length > 0) {
+                schemaJson.review = reviewsList.slice(0, 10).map(r => ({
+                    "@type": "Review",
+                    "author": {
+                        "@type": "Person",
+                        "name": r.customer ? r.customer.name : "عميل متجر"
+                    },
+                    "datePublished": r.created_at ? r.created_at.split('T')[0] : new Date().toISOString().split('T')[0],
+                    "reviewBody": r.comment || "تقييم رائع",
+                    "reviewRating": {
+                        "@type": "Rating",
+                        "ratingValue": r.rating.toString(),
+                        "bestRating": "5",
+                        "worstRating": "1"
+                    }
+                }));
+            }
+
+            const script = document.createElement('script');
+            script.type = 'application/ld+json';
+            script.id = 'conversion-trust-reviews-schema';
+            script.textContent = JSON.stringify(schemaJson);
+            document.head.appendChild(script);
+
+            console.info('[ConversionTrust] Structured data (Review Schema) injected successfully for Google SEO.');
+        } catch (e) {
+            console.error('[ConversionTrust] Failed to inject structured data schema:', e);
+        }
     }
 })();
